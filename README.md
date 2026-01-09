@@ -118,11 +118,11 @@ src/
 
 ## 🛠️ Development Status
 
-- [x] Phase 0: Driver Bindings
-- [x] Phase 1: Core Runtime
-- [x] Phase 2: Kernel Integration
-- [x] Phase 3: Tensor Layer
-- [x] Phase 4: Model Loading
+- [ ] Phase 0: Driver Bindings
+- [ ] Phase 1: Core Runtime
+- [ ] Phase 2: Kernel Integration
+- [ ] Phase 3: Tensor Layer
+- [ ] Phase 4: Model Loading
 - [ ] Phase 5: Inference Engine (In Progress)
 - [ ] Phase 6: Production Serving
 
