@@ -118,7 +118,7 @@ src/
 
 ## 🛠️ Development Status
 
-- [ ] Phase 0: Driver Bindings
+- [x] Phase 0: Driver Bindings
 - [ ] Phase 1: Core Runtime
 - [ ] Phase 2: Kernel Integration
 - [ ] Phase 3: Tensor Layer

@@ -23,7 +23,7 @@ pub const Tensor = struct {
     shape: []const usize,
     dtype: DataType,
     device: *core.Device,
-    
+
     pub fn init(device: *core.Device, shape: []const usize, dtype: DataType) !Tensor {
         // TODO: Implement tensor initialization
         return Tensor{
@@ -33,30 +33,31 @@ pub const Tensor = struct {
             .device = device,
         };
     }
-    
+
     pub fn deinit(self: *Tensor) void {
         // TODO: Implement tensor cleanup
         _ = self;
     }
-    
+
     pub fn zeros(device: *core.Device, shape: []const usize, dtype: DataType) !Tensor {
         // TODO: Implement zero tensor creation
         return try Tensor.init(device, shape, dtype);
     }
-    
+
     pub fn fromSlice(self: *Tensor, data: anytype) !void {
+        _ = self;
         // TODO: Implement tensor initialization from slice
         _ = data;
     }
-    
+
     pub fn getShape(self: *const Tensor) []const usize {
         return self.shape;
     }
-    
+
     pub fn getDtype(self: *const Tensor) DataType {
         return self.dtype;
     }
-    
+
     pub fn getNumel(self: *const Tensor) usize {
         // TODO: Implement element count calculation
         var count: usize = 1;
@@ -65,32 +66,37 @@ pub const Tensor = struct {
         }
         return count;
     }
-    
+
     pub fn matmul(self: *Tensor, other: Tensor) !Tensor {
+        _ = self;
         // TODO: Implement matrix multiplication
         _ = other;
         return undefined;
     }
-    
+
     pub fn add(self: *Tensor, other: Tensor) !Tensor {
+        _ = self;
         // TODO: Implement tensor addition
         _ = other;
         return undefined;
     }
-    
+
     pub fn mul(self: *Tensor, scalar: f32) !Tensor {
+        _ = self;
         // TODO: Implement scalar multiplication
         _ = scalar;
         return undefined;
     }
-    
+
     pub fn reshape(self: *Tensor, shape: []const usize) !Tensor {
+        _ = self;
         // TODO: Implement tensor reshape
         _ = shape;
         return undefined;
     }
-    
+
     pub fn transpose(self: *Tensor) !Tensor {
+        _ = self;
         // TODO: Implement tensor transpose
         return undefined;
     }

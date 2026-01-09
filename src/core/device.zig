@@ -9,7 +9,7 @@ pub const Device = struct {
     index: u32,
     handle: ?bindings.CUdevice,
     properties: DeviceProperties,
-    
+
     pub const DeviceProperties = struct {
         name: [256]u8,
         total_memory: usize,
@@ -23,30 +23,31 @@ pub const Device = struct {
             minor: u32,
         },
     };
-    
+
     pub fn init(index: u32) !Device {
+        _ = index;
         // TODO: Implement device initialization
         return Device{
             .handle = undefined,
             .properties = undefined,
         };
     }
-    
+
     pub fn deinit(self: *Device) void {
         // TODO: Implement device cleanup
         _ = self;
     }
-    
+
     pub fn getProperties(self: *const Device) DeviceProperties {
         // TODO: Implement property retrieval
         return self.properties;
     }
-    
+
     pub fn getCount() !u32 {
         // TODO: Implement device count
         return 1;
     }
-    
+
     pub fn getAllDevices() ![]Device {
         // TODO: Implement device enumeration
         return &.{};

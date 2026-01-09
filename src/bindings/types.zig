@@ -2,8 +2,8 @@
 // CUDA type definitions and constants
 // TODO: Implement type definitions
 
-pub const c_int = @import("std").c_int;
-pub const c_uint = @import("std").c_uint;
+pub const @"c_int" = @import("std").c_int;
+pub const @"c_uint" = @import("std").c_uint;
 
 // Device properties
 pub const DeviceAttribute = enum(c_int) {
@@ -49,18 +49,18 @@ pub const FuncCacheConfig = enum(c_int) {
     prefer_global_mem = 3,
 };
 
-// Stream capture modes  
+// Stream capture modes
 pub const StreamCaptureMode = enum(c_int) {
-    none = -1,        // Not capturing
+    none = -1, // Not capturing
     incremental = 0, // Incremental stream capture mode
-    all = 1,         // Capture all operations in the stream
+    all = 1, // Capture all operations in the stream
 };
 
 // Stream creation flags
 pub const StreamFlags = enum(c_uint) {
     default = 0,
-    non_blocking = 1,       // Operations don't block host thread
-    high_priority = 2,   // High-priority for time-critical ops
+    non_blocking = 1, // Operations don't block host thread
+    high_priority = 2, // High-priority for time-critical ops
 };
 
 // Cooperative kernel launch flags
