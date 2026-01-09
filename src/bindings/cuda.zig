@@ -9,9 +9,9 @@ pub const @"c_int" = c_int;
 pub const @"c_uint" = c_uint;
 pub const @"c_ulonglong" = c_ulonglong;
 pub const @"c_char" = c_char;
-pub const @"c_float" = f32;
-pub const @"c_double" = f64;
-pub const @"c_size_t" = usize;
+pub const c_float = f32;
+pub const c_double = f64;
+pub const c_size_t = usize;
 
 // CUDA version structure
 pub const CUdriver = extern struct {
@@ -130,32 +130,31 @@ pub const CUmemoryAdvise = enum(c_int) {
 var lib: ?std.DynLib = null;
 
 // Function Pointers
-pub var cuInit: *const fn(flags: c_uint) callconv(.c) CUresult = undefined;
-pub var cuDriverGetVersion: *const fn(driver_version: *c_int) callconv(.c) CUresult = undefined;
-pub var cuDeviceGetCount: *const fn(count: *c_int) callconv(.c) CUresult = undefined;
-pub var cuDeviceGetProperties: *const fn(device: *CUdevprop, device_id: c_int) callconv(.c) CUresult = undefined;
-// pub var cuDeviceGetName: *const fn(pname: [*:0]c_char, numbytes: c_int, p: *CUdevice) callconv(.c) CUresult = undefined;
-pub var cuDeviceComputeCapability: *const fn(major: *c_int, minor: *c_int, device: CUdevice) callconv(.c) CUresult = undefined;
-pub var cuDeviceTotalMem: *const fn(bytes: *c_ulonglong, device: CUdevice) callconv(.c) CUresult = undefined; // device handle
-pub var cuGetErrorName: *const fn(result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuGetErrorString: *const fn(result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuInit: *const fn (flags: c_uint) callconv(.c) CUresult = undefined;
+pub var cuDriverGetVersion: *const fn (driver_version: *c_int) callconv(.c) CUresult = undefined;
+pub var cuDeviceGetCount: *const fn (count: *c_int) callconv(.c) CUresult = undefined;
+pub var cuDeviceGetProperties: *const fn (device: *CUdevprop, device_id: c_int) callconv(.c) CUresult = undefined;
+pub var cuDeviceGetName: *const fn (name: [*:0]c_char, len: c_int, dev: CUdevice) callconv(.c) CUresult = undefined;
+pub var cuDeviceComputeCapability: *const fn (major: *c_int, minor: *c_int, device: CUdevice) callconv(.c) CUresult = undefined;
+pub var cuDeviceTotalMem: *const fn (bytes: *c_ulonglong, device: CUdevice) callconv(.c) CUresult = undefined; // device handle
+pub var cuGetErrorName: *const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuGetErrorString: *const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = undefined;
 // Note on error string getters: they usually take char**.
 
 // Memory
-pub var cuMemAllocHost: *const fn(pHost: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemFreeHost: *const fn(pHost: *anyopaque) callconv(.c) CUresult = undefined;
-pub var cuMemAlloc: *const fn(pdDev: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemFree: *const fn(pdDev: *anyopaque) callconv(.c) CUresult = undefined;
-pub var cuMemcpyHtoD: *const fn(dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemcpyDtoH: *const fn(hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemcpyDtoD: *const fn(dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemAllocHost: *const fn (pHost: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemFreeHost: *const fn (pHost: *anyopaque) callconv(.c) CUresult = undefined;
+pub var cuMemAlloc: *const fn (pdDev: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemFree: *const fn (pdDev: *anyopaque) callconv(.c) CUresult = undefined;
+pub var cuMemcpyHtoD: *const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemcpyDtoH: *const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemcpyDtoD: *const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
 
 // Modules
-pub var cuModuleLoad: *const fn(pmodule: *?*CUmodule, fname: [*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuModuleLoadData: *const fn(pmodule: *?*CUmodule, image: [*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuModuleUnload: *const fn(module: *CUmodule) callconv(.c) CUresult = undefined;
-pub var cuModuleGetFunction: *const fn(pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
-
+pub var cuModuleLoad: *const fn (pmodule: *?*CUmodule, fname: [*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuModuleLoadData: *const fn (pmodule: *?*CUmodule, image: [*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuModuleUnload: *const fn (module: *CUmodule) callconv(.c) CUresult = undefined;
+pub var cuModuleGetFunction: *const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
 
 pub fn load() !void {
     if (lib != null) return;
@@ -180,7 +179,8 @@ pub fn load() !void {
     cuDriverGetVersion = l.lookup(@TypeOf(cuDriverGetVersion), "cuDriverGetVersion") orelse return error.SymbolNotFound;
     cuDeviceGetCount = l.lookup(@TypeOf(cuDeviceGetCount), "cuDeviceGetCount") orelse return error.SymbolNotFound;
     cuDeviceGetProperties = l.lookup(@TypeOf(cuDeviceGetProperties), "cuDeviceGetProperties") orelse return error.SymbolNotFound;
-    
+    cuDeviceGetName = l.lookup(@TypeOf(cuDeviceGetName), "cuDeviceGetName") orelse return error.SymbolNotFound;
+
     // Check if cuDeviceComputeCapability exists (might be version dependent)
     if (l.lookup(@TypeOf(cuDeviceComputeCapability), "cuDeviceComputeCapability")) |fn_ptr| {
         cuDeviceComputeCapability = fn_ptr;
@@ -191,30 +191,30 @@ pub fn load() !void {
     if (l.lookup(@TypeOf(cuDeviceTotalMem), "cuDeviceTotalMem_v2")) |fn_ptr| {
         cuDeviceTotalMem = fn_ptr;
     }
-    
+
     // Error functions
     cuGetErrorName = l.lookup(@TypeOf(cuGetErrorName), "cuGetErrorName") orelse return error.SymbolNotFound;
     cuGetErrorString = l.lookup(@TypeOf(cuGetErrorString), "cuGetErrorString") orelse return error.SymbolNotFound;
 
     // Memory
-    cuMemAllocHost = l.lookup(@TypeOf(cuMemAllocHost), "cuMemAllocHost") orelse 
-                     l.lookup(@TypeOf(cuMemAllocHost), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
+    cuMemAllocHost = l.lookup(@TypeOf(cuMemAllocHost), "cuMemAllocHost") orelse
+        l.lookup(@TypeOf(cuMemAllocHost), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
     cuMemFreeHost = l.lookup(@TypeOf(cuMemFreeHost), "cuMemFreeHost") orelse return error.SymbolNotFound;
-    
-    cuMemAlloc = l.lookup(@TypeOf(cuMemAlloc), "cuMemAlloc") orelse 
-                 l.lookup(@TypeOf(cuMemAlloc), "cuMemAlloc_v2") orelse return error.SymbolNotFound;
-                 
-    cuMemFree = l.lookup(@TypeOf(cuMemFree), "cuMemFree") orelse 
-                l.lookup(@TypeOf(cuMemFree), "cuMemFree_v2") orelse return error.SymbolNotFound;
-                
-    cuMemcpyHtoD = l.lookup(@TypeOf(cuMemcpyHtoD), "cuMemcpyHtoD") orelse 
-                   l.lookup(@TypeOf(cuMemcpyHtoD), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
-                   
-    cuMemcpyDtoH = l.lookup(@TypeOf(cuMemcpyDtoH), "cuMemcpyDtoH") orelse 
-                   l.lookup(@TypeOf(cuMemcpyDtoH), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
-                   
-    cuMemcpyDtoD = l.lookup(@TypeOf(cuMemcpyDtoD), "cuMemcpyDtoD") orelse 
-                   l.lookup(@TypeOf(cuMemcpyDtoD), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
+
+    cuMemAlloc = l.lookup(@TypeOf(cuMemAlloc), "cuMemAlloc") orelse
+        l.lookup(@TypeOf(cuMemAlloc), "cuMemAlloc_v2") orelse return error.SymbolNotFound;
+
+    cuMemFree = l.lookup(@TypeOf(cuMemFree), "cuMemFree") orelse
+        l.lookup(@TypeOf(cuMemFree), "cuMemFree_v2") orelse return error.SymbolNotFound;
+
+    cuMemcpyHtoD = l.lookup(@TypeOf(cuMemcpyHtoD), "cuMemcpyHtoD") orelse
+        l.lookup(@TypeOf(cuMemcpyHtoD), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
+
+    cuMemcpyDtoH = l.lookup(@TypeOf(cuMemcpyDtoH), "cuMemcpyDtoH") orelse
+        l.lookup(@TypeOf(cuMemcpyDtoH), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
+
+    cuMemcpyDtoD = l.lookup(@TypeOf(cuMemcpyDtoD), "cuMemcpyDtoD") orelse
+        l.lookup(@TypeOf(cuMemcpyDtoD), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
 
     // Modules
     cuModuleLoad = l.lookup(@TypeOf(cuModuleLoad), "cuModuleLoad") orelse return error.SymbolNotFound;
@@ -237,12 +237,12 @@ pub fn init(flags: c_uint) errors.CUDAError!void {
     if (result == CUDA_SUCCESS) {
         return;
     }
-    
+
     // Log unexpected result to help debugging
     if (result != 0) {
         std.log.err("cuInit failed with code: {}", .{result});
     }
-    
+
     return errors.cudaError(result);
 }
 
@@ -253,11 +253,11 @@ pub fn getVersion() errors.CUDAError![2]c_int {
     if (result != CUDA_SUCCESS) {
         return errors.cudaError(result);
     }
-    
+
     // Convert driver version to major.minor format
     const major = @divTrunc(driver_version, 1000);
     const minor = @mod(driver_version, 1000);
-    
+
     return [2]c_int{ major, minor };
 }
 
@@ -304,6 +304,64 @@ pub fn copyDtoH(host_dst: []u8, device_src: *const anyopaque) errors.CUDAError!v
     const result = cuMemcpyDtoH(host_dst.ptr, device_src, host_dst.len);
     if (result == CUDA_SUCCESS) {
         return;
+    }
+    return errors.cudaError(result);
+}
+
+/// Get device properties
+pub fn getDeviceProperties(device: CUdevice) errors.CUDAError!CUdevprop {
+    var prop: CUdevprop = undefined;
+    const result = cuDeviceGetProperties(&prop, device);
+    if (result == CUDA_SUCCESS) {
+        return prop;
+    }
+    return errors.cudaError(result);
+}
+
+/// Get device name
+pub fn getDeviceName(device: CUdevice, allocator: std.mem.Allocator) ![]u8 {
+    var buffer: [256]u8 = undefined;
+    // Cast buffer pointer to [*:0]c_char expected by C ABI
+    const ptr = @as([*:0]c_char, @ptrCast(&buffer));
+    const result = cuDeviceGetName(ptr, 256, device);
+
+    if (result != CUDA_SUCCESS) {
+        return errors.cudaError(result);
+    }
+
+    const len = std.mem.len(ptr);
+    const slice = buffer[0..len];
+    return allocator.dupe(u8, slice);
+}
+
+/// Get compute capability
+pub fn getComputeCapability(device: CUdevice) errors.CUDAError!struct { major: c_int, minor: c_int } {
+    var major: c_int = undefined;
+    var minor: c_int = undefined;
+    const result = cuDeviceComputeCapability(&major, &minor, device);
+    if (result == CUDA_SUCCESS) {
+        return .{ .major = major, .minor = minor };
+    }
+    return errors.cudaError(result);
+}
+
+/// Get total device memory
+pub fn getTotalMem(device: CUdevice) errors.CUDAError!usize {
+    var bytes: c_ulonglong = undefined;
+    const result = cuDeviceTotalMem(&bytes, device);
+    if (result == CUDA_SUCCESS) {
+        return @as(usize, @intCast(bytes));
+    }
+    return errors.cudaError(result);
+}
+
+/// Get error string
+pub fn getErrorString(error_code: CUresult) ![]const u8 {
+    var ptr: [*:0]const c_char = undefined;
+    const result = cuGetErrorString(error_code, &ptr);
+    if (result == CUDA_SUCCESS) {
+        const span = std.mem.span(ptr);
+        return @ptrCast(span);
     }
     return errors.cudaError(result);
 }
