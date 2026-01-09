@@ -6,7 +6,8 @@ const bindings = @import("../bindings/cuda.zig");
 const types = @import("../bindings/types.zig");
 
 pub const Device = struct {
-    handle: *bindings.CUdevice,
+    index: u32,
+    handle: ?bindings.CUdevice,
     properties: DeviceProperties,
     
     pub const DeviceProperties = struct {

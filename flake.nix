@@ -17,7 +17,7 @@
             pkgs.curl      # Added for curl in shell
           ];
           shellHook = ''
-            echo "Zig development environment ready (using 0.15)"
+            echo "Zig development environment ready (using 0.15.2)"
           '';
         };
       }
