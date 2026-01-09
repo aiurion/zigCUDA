@@ -40,6 +40,10 @@ pub const CUDAError = error{
     NoDevice,
     /// Operating System Error
     OperatingSystemError,
+    /// CUDA library not found
+    CudaLibraryNotFound,
+    /// Symbol not found in library
+    SymbolNotFound,
 };
 
 /// Map CUDA result to Zig error (assumes result is not success)

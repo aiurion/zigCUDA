@@ -63,7 +63,5 @@ pub const createDefaultStream = Stream.create;
 pub const createNonBlockingStream = Stream.createNonBlocking; 
 pub const createHighPriorityStream = Stream.createHighPriority;
 
-// Import types from bindings
-const cuda_bindings = @import("../bindings/cuda.zig");
-const c_uint = cuda_bindings.c_uint;
+const c_uint = @import("../bindings/cuda.zig").c_uint;
 const errors = @import("../bindings/errors.zig");

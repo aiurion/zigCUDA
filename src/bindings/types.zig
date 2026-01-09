@@ -41,4 +41,36 @@ pub const ComputeMode = enum(c_int) {
     prohibited = 2,
 };
 
+// Function cache configurations
+pub const FuncCacheConfig = enum(c_int) {
+    prefer_none = 0,
+    prefer_shared_mem = 1,
+    prefer_cache = 2,
+    prefer_global_mem = 3,
+};
+
+// Stream capture modes  
+pub const StreamCaptureMode = enum(c_int) {
+    none = -1,        // Not capturing
+    incremental = 0, // Incremental stream capture mode
+    all = 1,         // Capture all operations in the stream
+};
+
+// Stream creation flags
+pub const StreamFlags = enum(c_uint) {
+    default = 0,
+    non_blocking = 1,       // Operations don't block host thread
+    high_priority = 2,   // High-priority for time-critical ops
+};
+
+// Cooperative kernel launch flags
+pub const CooperativeLaunchFlags = enum(c_uint) {
+    default = 0,
+    multi_device = 1 << 0,
+    device_function = 1 << 1,
+};
+
+// Stream callback function type
+pub const CUstreamCallback = *const fn (stream: anyopaque, status: c_int, userdata: ?*anyopaque) callconv(.c) void;
+
 // TODO: Add more type definitions

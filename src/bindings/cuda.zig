@@ -171,6 +171,30 @@ pub var cuCtxPushCurrent: *const fn (ctx: *CUcontext) callconv(.c) CUresult = un
 pub var cuCtxPopCurrent: *const fn (pctx: *?*CUcontext, flags: c_uint) callconv(.c) CUresult = undefined;
 pub var cuModuleGetFunction: *const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
 
+// Additional Module & Kernel Management Functions
+pub var cuModuleGetGlobal: *const fn (pglobal: *?*anyopaque, pbytesize: *c_size_t, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuModuleGetTexRef: *const fn (ptref: *?*anyopaque, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuModuleLaunch: *const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = undefined;
+pub var cuModuleLaunchCooperative: *const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = undefined;
+pub var cuFuncSetCache: *const fn (function: *CUfunction, cache_config: c_int) callconv(.c) CUresult = undefined;
+pub var cuFuncSetSharedMem: *const fn (function: *CUfunction, bytes: c_uint) callconv(.c) CUresult = undefined;
+
+// Stream Management Functions
+pub var cuStreamCreate: *const fn (pstream: *?*CUstream, flags: c_uint) callconv(.c) CUresult = undefined;
+pub var cuStreamDestroy: *const fn (stream: *CUstream) callconv(.c) CUresult = undefined;
+pub var cuStreamQuery: *const fn (stream: *CUstream) callconv(.c) CUresult = undefined;
+pub var cuStreamSynchronize: *const fn (stream: *CUstream) callconv(.c) CUresult = undefined;
+pub var cuStreamAddCallback: *const fn (stream: *CUstream, callback: *anyopaque, userdata: ?*anyopaque, flags: c_uint) callconv(.c) CUresult = undefined;
+pub var cuStreamBeginCapture: *const fn (stream: *CUstream, mode: c_int) callconv(.c) CUresult = undefined;
+pub var cuStreamEndCapture: *const fn (pstream_count: *?*[]*CUstream, stream: *CUstream) callconv(.c) CUresult = undefined;
+pub var cuStreamGetCaptureState: *const fn (state: *c_int, stream: *CUstream) callconv(.c) CUresult = undefined;
+
+// Event Management Functions
+pub var cuEventCreate: *const fn (pEvent: *?*CUevent, flags: c_uint) callconv(.c) CUresult = undefined;
+pub var cuEventDestroy: *const fn (event: *CUevent) callconv(.c) CUresult = undefined;
+pub var cuEventRecord: *const fn (event: *CUevent, stream: ?*CUstream) callconv(.c) CUresult = undefined;
+pub var cuEventSynchronize: *const fn (event: *CUevent) callconv(.c) CUresult = undefined;
+
 pub fn load() !void {
     if (lib != null) return;
 
@@ -264,6 +288,73 @@ pub fn load() !void {
     cuModuleLoadData = l.lookup(@TypeOf(cuModuleLoadData), "cuModuleLoadData") orelse return error.SymbolNotFound;
     cuModuleUnload = l.lookup(@TypeOf(cuModuleUnload), "cuModuleUnload") orelse return error.SymbolNotFound;
     cuModuleGetFunction = l.lookup(@TypeOf(cuModuleGetFunction), "cuModuleGetFunction") orelse return error.SymbolNotFound;
+
+    // Additional Module & Kernel Management Functions
+    if (l.lookup(@TypeOf(cuModuleGetGlobal), "cuModuleGetGlobal")) |fn_ptr| {
+        cuModuleGetGlobal = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuModuleGetTexRef), "cuModuleGetTexRef")) |fn_ptr| {
+        cuModuleGetTexRef = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuModuleLaunch), "cuModuleLaunch")) |fn_ptr| {
+        cuModuleLaunch = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuModuleLaunchCooperative), "cuModuleLaunchCooperative")) |fn_ptr| {
+        cuModuleLaunchCooperative = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuFuncSetCache), "cuFuncSetCache")) |fn_ptr| {
+        cuFuncSetCache = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuFuncSetSharedMem), "cuFuncSetSharedMem")) |fn_ptr| {
+        cuFuncSetSharedMem = fn_ptr;
+    }
+
+    // Stream Management Functions
+    if (l.lookup(@TypeOf(cuStreamCreate), "cuStreamCreate") orelse l.lookup(@TypeOf(cuStreamCreate), "cuStreamCreate_v2")) |fn_ptr| {
+        cuStreamCreate = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamDestroy), "cuStreamDestroy")) |fn_ptr| {
+        cuStreamDestroy = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamQuery), "cuStreamQuery")) |fn_ptr| {
+        cuStreamQuery = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamSynchronize), "cuStreamSynchronize") orelse l.lookup(@TypeOf(cuStreamSynchronize), "cuStreamSynchronize_v2")) |fn_ptr| {
+        cuStreamSynchronize = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamAddCallback), "cuStreamAddCallback")) |fn_ptr| {
+        cuStreamAddCallback = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamBeginCapture), "cuStreamBeginCapture_v2") orelse l.lookup(@TypeOf(cuStreamBeginCapture), "cuStreamBeginCapture")) |fn_ptr| {
+        cuStreamBeginCapture = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamEndCapture), "cuStreamEndCapture_v2") orelse l.lookup(@TypeOf(cuStreamEndCapture), "cuStreamEndCapture")) |fn_ptr| {
+        cuStreamEndCapture = fn_ptr;
+    }
+    if (l.lookup(@TypeOf(cuStreamGetCaptureState), "cuStreamGetCaptureState")) |fn_ptr| {
+        cuStreamGetCaptureState = fn_ptr;
+    }
+
+    // Event Management Functions
+    cuEventCreate = l.lookup(@TypeOf(cuEventCreate), "cuEventCreate") orelse return error.SymbolNotFound;
+    if (l.lookup(@TypeOf(cuEventDestroy), "cuEventDestroy")) |fn_ptr| {
+        cuEventDestroy = fn_ptr;
+    } else {
+        // Provide fallback - some CUDA versions might not have this
+        std.log.warn("cuEventDestroy not found, event cleanup will be skipped", .{});
+    }
+    if (l.lookup(@TypeOf(cuEventRecord), "cuEventRecord")) |fn_ptr| {
+        cuEventRecord = fn_ptr;
+    } else {
+        // Provide fallback - some CUDA versions might not have this
+        std.log.warn("cuEventRecord not found, event recording will be skipped", .{});
+    }
+    if (l.lookup(@TypeOf(cuEventSynchronize), "cuEventSynchronize") orelse l.lookup(@TypeOf(cuEventSynchronize), "cuEventSynchronize_v2")) |fn_ptr| {
+        cuEventSynchronize = fn_ptr;
+    } else {
+        // Provide fallback - some CUDA versions might not have this
+        std.log.warn("cuEventSynchronize not found, event synchronization will be skipped", .{});
+    }
 }
 
 // ============================================================================
@@ -538,6 +629,17 @@ pub fn getTotalMem(device: CUdevice) errors.CUDAError!usize {
     return errors.cudaError(result);
 }
 
+/// Get error name
+pub fn getErrorName(error_code: CUresult) ![]const u8 {
+    var ptr: [*:0]const c_char = undefined;
+    const result = cuGetErrorName(error_code, &ptr);
+    if (result == CUDA_SUCCESS) {
+        const span = std.mem.span(ptr);
+        return @ptrCast(span);
+    }
+    return errors.cudaError(result);
+}
+
 /// Get error string
 pub fn getErrorString(error_code: CUresult) ![]const u8 {
     var ptr: [*:0]const c_char = undefined;
@@ -605,6 +707,428 @@ pub fn popContext() errors.CUDAError!*CUcontext {
         return ctx_handle.?;
     }
     return errors.cudaError(result);
+}
+
+// ============================================================================
+// MODULE & KERNEL MANAGEMENT WRAPPERS
+// ============================================================================
+
+/// Load a CUDA module from file (.cubin/.ptx)
+pub fn loadModule(filename: [:0]const c_char) errors.CUDAError!*CUmodule {
+    var module_handle: ?*CUmodule = null;
+    const result = cuModuleLoad(&module_handle, filename);
+    if (result == CUDA_SUCCESS) {
+        return module_handle.?;
+    }
+    return errors.cudaError(result);
+}
+
+/// Load a CUDA module from memory
+pub fn loadModuleFromData(image: [:0]const c_char) errors.CUDAError!*CUmodule {
+    var module_handle: ?*CUmodule = null;
+    const result = cuModuleLoadData(&module_handle, image);
+    if (result == CUDA_SUCCESS) {
+        return module_handle.?;
+    }
+    return errors.cudaError(result);
+}
+
+/// Unload a CUDA module
+pub fn unloadModule(module: *CUmodule) errors.CUDAError!void {
+    const result = cuModuleUnload(module);
+    if (result == CUDA_SUCCESS) {
+        return;
+    }
+    return errors.cudaError(result);
+}
+
+/// Get function handle from module
+pub fn getFunctionFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!*CUfunction {
+    var func_handle: ?*CUfunction = null;
+    const result = cuModuleGetFunction(&func_handle, module, name);
+    if (result == CUDA_SUCCESS) {
+        return func_handle.?;
+    }
+    return errors.cudaError(result);
+}
+
+/// Get global variable from module
+pub fn getGlobalFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!struct { ptr: *anyopaque, size: c_size_t } {
+    var global_ptr: ?*anyopaque = null;
+    var bytesize: c_size_t = undefined;
+    
+    if (cuModuleGetGlobal != undefined and cuModuleGetGlobal != null) {
+        const fn_ptr = @as(*const fn (*?*anyopaque, *c_size_t, *CUmodule, [*:0]const c_char) callconv(.c) CUresult, @ptrCast(cuModuleGetGlobal));
+        const result = fn_ptr(&global_ptr, &bytesize, module, name);
+        if (result == CUDA_SUCCESS) {
+            return .{ .ptr = global_ptr.?, .size = bytesize };
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback for systems that don't support this
+        std.log.warn("cuModuleGetGlobal not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Get texture reference from module  
+pub fn getTextureFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!*anyopaque {
+    if (cuModuleGetTexRef != undefined and cuModuleGetTexRef != null) {
+        var tex_ref: ?*anyopaque = null;
+        const fn_ptr = @as(*const fn (*?*anyopaque, *CUmodule, [*:0]const c_char) callconv(.c) CUresult, @ptrCast(cuModuleGetTexRef));
+        const result = fn_ptr(&tex_ref, module, name);
+        if (result == CUDA_SUCCESS) {
+            return tex_ref.?;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback for systems that don't support this
+        std.log.warn("cuModuleGetTexRef not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Launch kernel synchronously from module
+pub fn launchKernel(
+    function: *CUfunction,
+    grid_dim_x: c_uint,
+    grid_dim_y: c_uint,
+    block_dim_x: c_uint,
+    block_dim_y: c_uint,
+    block_dim_z: c_uint,
+    shared_mem_bytes: c_uint,
+    stream: ?*CUstream,
+    kernel_params: []?*anyopaque
+) errors.CUDAError!void {
+    
+    if (cuModuleLaunch != undefined and cuModuleLaunch != null) {
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]?*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunch));
+        
+        // Convert slice to C array
+        var params_array: [32]?*anyopaque = undefined; // Max 32 parameters
+        const param_count = @min(kernel_params.len, 32);
+        for (0..param_count) |i| {
+            params_array[i] = kernel_params[i];
+        }
+        
+        const result = fn_ptr(
+            function,
+            grid_dim_x, grid_dim_y,
+            block_dim_x, block_dim_y, block_dim_z,
+            shared_mem_bytes,
+            stream,
+            &params_array
+        );
+        
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - synchronous execution not available
+        std.log.warn("cuModuleLaunch not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Launch cooperative kernels from module
+pub fn launchCooperativeKernel(
+    function: *CUfunction,
+    grid_dim_x: c_uint,
+    grid_dim_y: c_uint,
+    block_dim_x: c_uint,
+    block_dim_y: c_uint,
+    block_dim_z: c_uint,
+    shared_mem_bytes: c_uint,
+    stream: ?*CUstream,
+    kernel_params: []?*anyopaque
+) errors.CUDAError!void {
+    
+    if (cuModuleLaunchCooperative != undefined and cuModuleLaunchCooperative != null) {
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]?*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunchCooperative));
+        
+        // Convert slice to C array
+        var params_array: [32]?*anyopaque = undefined; // Max 32 parameters
+        const param_count = @min(kernel_params.len, 32);
+        for (0..param_count) |i| {
+            params_array[i] = kernel_params[i];
+        }
+        
+        const result = fn_ptr(
+            function,
+            grid_dim_x, grid_dim_y,
+            block_dim_x, block_dim_y, block_dim_z,
+            shared_mem_bytes,
+            stream,
+            &params_array
+        );
+        
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - cooperative execution not available
+        std.log.warn("cuModuleLaunchCooperative not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Set kernel cache configuration
+pub fn setFunctionCache(function: *CUfunction, cache_config: c_int) errors.CUDAError!void {
+    if (cuFuncSetCache != undefined and cuFuncSetCache != null) {
+        const result = @as(*const fn (*CUfunction, c_int) callconv(.c) CUresult, @ptrCast(cuFuncSetCache))(function, cache_config);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - function cache configuration not available
+        std.log.warn("cuFuncSetCache not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Set shared memory configuration for kernel
+pub fn setFunctionSharedMem(function: *CUfunction, bytes: c_uint) errors.CUDAError!void {
+    if (cuFuncSetSharedMem != undefined and cuFuncSetSharedMem != null) {
+        const result = @as(*const fn (*CUfunction, c_uint) callconv(.c) CUresult, @ptrCast(cuFuncSetSharedMem))(function, bytes);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - shared memory configuration not available
+        std.log.warn("cuFuncSetSharedMem not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+// ============================================================================
+// STREAM MANAGEMENT WRAPPERS (8 functions)
+// ============================================================================
+
+/// Create a new CUDA stream
+pub fn createStream(flags: c_uint) errors.CUDAError!*CUstream {
+    var stream_handle: ?*CUstream = null;
+    const result = cuStreamCreate(&stream_handle, flags);
+    if (result == CUDA_SUCCESS) {
+        return stream_handle.?;
+    }
+    return errors.cudaError(result);
+}
+
+/// Destroy a CUDA stream
+pub fn destroyStream(stream: *CUstream) errors.CUDAError!void {
+    const result = cuStreamDestroy(stream);
+    if (result == CUDA_SUCCESS) {
+        return;
+    }
+    return errors.cudaError(result);
+}
+
+/// Query stream status without blocking
+pub fn queryStream(stream: *CUstream) errors.CUDAError!bool {
+    const result = cuStreamQuery(stream);
+    switch (result) {
+        0 => return true, // Success - operation completed
+        600 => return false, // CUDA_ERROR_NOT_READY - still running
+        else => return errors.cudaError(result),
+    }
+}
+
+/// Wait for stream to complete all operations synchronously
+pub fn syncStream(stream: *CUstream) errors.CUDAError!void {
+    const result = cuStreamSynchronize(stream);
+    if (result == CUDA_SUCCESS) {
+        return;
+    }
+    return errors.cudaError(result);
+}
+
+/// Add callback function to be called when stream completes
+pub fn addStreamCallback(
+    stream: *CUstream,
+    callback: *anyopaque, 
+    userdata: ?*anyopaque,
+    flags: c_uint
+) errors.CUDAError!void {
+    if (cuStreamAddCallback != undefined and cuStreamAddCallback != null) {
+        const fn_ptr = @as(*const fn (*CUstream, *anyopaque, ?*anyopaque, c_uint) callconv(.c) CUresult, @ptrCast(cuStreamAddCallback));
+        const result = fn_ptr(stream, callback, userdata, flags);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - stream callbacks not available
+        std.log.warn("cuStreamAddCallback not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Begin capturing operations into a graph  
+pub fn beginCapture(stream: *CUstream, mode: c_int) errors.CUDAError!void {
+    if (cuStreamBeginCapture != undefined and cuStreamBeginCapture != null) {
+        const result = @as(*const fn (*CUstream, c_int) callconv(.c) CUresult, @ptrCast(cuStreamBeginCapture))(stream, mode);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - stream capture not available
+        std.log.warn("cuStreamBeginCapture not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// End capturing and get the captured streams  
+pub fn endCapture(stream: *CUstream) errors.CUDAError!*[]*CUstream {
+    if (cuStreamEndCapture != undefined and cuStreamEndCapture != null) {
+        var stream_count: ?*c_int = null;
+        
+        // First call to get number of streams
+        const result1 = @as(*const fn (*?*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(&stream_count, stream);
+        if (result1 == CUDA_SUCCESS and stream_count != null) {
+            // Mark as used to avoid unused variable warning
+            const count = stream_count.?;
+            _ = count;
+            
+            var streams: ?*[]*CUstream = undefined;
+            // Second call to get the actual streams
+            const result2 = @as(*const fn (*?*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(@ptrCast(&streams), stream);
+            
+            if (result2 == CUDA_SUCCESS and streams != null) {
+                return &streams.?;
+            }
+        }
+        
+        // If we get here, there was an issue with the capture
+        const final_result = cuStreamQuery(stream);
+        return errors.cudaError(final_result);
+    } else {
+        // Fallback - stream capture not available
+        std.log.warn("cuStreamEndCapture not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Get current capture state of a stream
+pub fn getCaptureState(stream: *CUstream) errors.CUDAError!c_int {
+    var state: c_int = undefined;
+    
+    if (cuStreamGetCaptureState != undefined and cuStreamGetCaptureState != null) {
+        const result = @as(*const fn (*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamGetCaptureState))(&state, stream);
+        if (result == CUDA_SUCCESS) {
+            return state;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - capture state not available
+        std.log.warn("cuStreamGetCaptureState not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Create a default stream (convenience function)
+pub fn createDefaultStream() errors.CUDAError!*CUstream {
+    const default_flags: c_uint = 0;
+    return createStream(default_flags);
+}
+
+/// Create a non-blocking stream for async operations
+pub fn createNonBlockingStream() errors.CUDAError!*CUstream {
+    // CU_STREAM_NON_BLOCKING flag (typically 1)
+    const flags: c_uint = 1; 
+    return createStream(flags);
+}
+
+/// Create a high-priority stream for time-critical operations  
+pub fn createHighPriorityStream() errors.CUDAError!*CUstream {
+    // CU_STREAM_HIGH_PRIORITY flag (typically 2)
+    const flags: c_uint = 2;
+    return createStream(flags);
+}
+
+// ============================================================================
+// EVENT MANAGEMENT WRAPPERS (4 functions)
+// ============================================================================
+
+/// Create a new CUDA event
+pub fn createEvent(flags: c_uint) errors.CUDAError!*CUevent {
+    var event_handle: ?*CUevent = null;
+    const result = cuEventCreate(&event_handle, flags);
+    if (result == CUDA_SUCCESS) {
+        return event_handle.?;
+    }
+    return errors.cudaError(result);
+}
+
+/// Destroy a CUDA event
+pub fn destroyEvent(event: *CUevent) errors.CUDAError!void {
+    if (cuEventDestroy != undefined and cuEventDestroy != null) {
+        const result = @as(*const fn (*CUevent) callconv(.c) CUresult, @ptrCast(cuEventDestroy))(event);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - event destruction not available
+        std.log.warn("cuEventDestroy not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Record an event in a stream (for synchronization)
+pub fn recordEvent(event: *CUevent, stream: ?*CUstream) errors.CUDAError!void {
+    if (cuEventRecord != undefined and cuEventRecord != null) {
+        const result = @as(*const fn (*CUevent, ?*CUstream) callconv(.c) CUresult, @ptrCast(cuEventRecord))(event, stream);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - event recording not available
+        std.log.warn("cuEventRecord not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+/// Synchronously wait for an event to complete
+pub fn syncEvent(event: *CUevent) errors.CUDAError!void {
+    if (cuEventSynchronize != undefined and cuEventSynchronize != null) {
+        const result = @as(*const fn (*CUevent) callconv(.c) CUresult, @ptrCast(cuEventSynchronize))(event);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - event synchronization not available
+        std.log.warn("cuEventSynchronize not available on this system", .{});
+        return error.SymbolNotFound;
+    }
+}
+
+// ============================================================================
+// CONVENIENCE EVENT FUNCTIONS
+// ============================================================================
+
+/// Create a default timing event (flags = 0)
+pub fn createDefaultTimingEvent() errors.CUDAError!*CUevent {
+    const default_flags: c_uint = 0;
+    return createEvent(default_flags);
+}
+
+/// Create an event with blocking flag (blocks host thread until completion)
+pub fn createBlockingEvent() errors.CUDAError!*CUevent {
+    // CU_EVENT_BLOCKING_SYNC flag (typically 1)
+    const flags: c_uint = 1;
+    return createEvent(flags);
+}
+
+/// Record an event in the default stream
+pub fn recordInDefaultStream(event: *CUevent) errors.CUDAError!void {
+    return recordEvent(event, null);
 }
 
 
