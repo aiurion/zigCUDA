@@ -77,6 +77,7 @@ pub const CUevent = opaque {};
 pub const CUmodule = opaque {};
 pub const CUfunction = opaque {};
 pub const CUarray = opaque {};
+pub const CUdeviceptr = c_ulonglong;
 pub const CUarray3D = extern struct {
     pub const CUDA_3D = extern struct {
         Width: c_uint,
@@ -129,71 +130,71 @@ pub const CUmemoryAdvise = enum(c_int) {
 
 var lib: ?std.DynLib = null;
 
-// Function Pointers
-pub var cuInit: *const fn (flags: c_uint) callconv(.c) CUresult = undefined;
-pub var cuDriverGetVersion: *const fn (driver_version: *c_int) callconv(.c) CUresult = undefined;
-pub var cuDeviceGetCount: *const fn (count: *c_int) callconv(.c) CUresult = undefined;
-pub var cuDeviceGetProperties: *const fn (device: *CUdevprop, device_id: c_int) callconv(.c) CUresult = undefined;
-pub var cuDeviceGetName: *const fn (name: [*:0]c_char, len: c_int, dev: CUdevice) callconv(.c) CUresult = undefined;
-pub var cuDeviceComputeCapability: *const fn (major: *c_int, minor: *c_int, device: CUdevice) callconv(.c) CUresult = undefined;
-pub var cuDeviceTotalMem: *const fn (bytes: *c_ulonglong, device: CUdevice) callconv(.c) CUresult = undefined; // device handle
-pub var cuGetErrorName: *const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuGetErrorString: *const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = undefined;
-// Note on error string getters: they usually take char**.
+// Function Pointers (using optional types for safety)
+pub var cuInit: ?*const fn (flags: c_uint) callconv(.c) CUresult = null;
+pub var cuDriverGetVersion: ?*const fn (driver_version: *c_int) callconv(.c) CUresult = null;
+pub var cuDeviceGetCount: ?*const fn (count: *c_int) callconv(.c) CUresult = null;
+pub var cuDeviceGetProperties: ?*const fn (device: *CUdevprop, device_id: c_int) callconv(.c) CUresult = null;
+pub var cuDeviceGetName: ?*const fn (name: [*:0]c_char, len: c_int, dev: CUdevice) callconv(.c) CUresult = null;
+pub var cuDeviceComputeCapability: ?*const fn (major: *c_int, minor: *c_int, device: CUdevice) callconv(.c) CUresult = null;
+pub var cuDeviceTotalMem: ?*const fn (bytes: *c_ulonglong, device: CUdevice) callconv(.c) CUresult = null;
+pub var cuDeviceGetAttribute: ?*const fn (pi: *c_int, attrib: c_int, dev: CUdevice) callconv(.c) CUresult = null;
+pub var cuGetErrorName: ?*const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = null;
+pub var cuGetErrorString: ?*const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = null;
 
 // Memory
-pub var cuMemAllocHost: *const fn (pHost: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemFreeHost: *const fn (pHost: *anyopaque) callconv(.c) CUresult = undefined;
-pub var cuMemAlloc: *const fn (pdDev: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemFree: *const fn (pdDev: *anyopaque) callconv(.c) CUresult = undefined;
-pub var cuMemcpyHtoD: *const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemcpyDtoH: *const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
-pub var cuMemcpyDtoD: *const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemAllocHost: ?*const fn (pHost: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemFreeHost: ?*const fn (pHost: *anyopaque) callconv(.c) CUresult = null;
+pub var cuMemAlloc: ?*const fn (pdDev: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemFree: ?*const fn (pdDev: *anyopaque) callconv(.c) CUresult = null;
+pub var cuMemcpyHtoD: ?*const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoH: ?*const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoD: ?*const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
 
 // Async memory operations
-pub var cuMemcpyHtoDAsync: *const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = undefined;
-pub var cuMemcpyDtoHAsync: *const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = undefined;
-pub var cuMemcpyDtoDAsync: *const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = undefined;
+pub var cuMemcpyHtoDAsync: ?*const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoHAsync: ?*const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoDAsync: ?*const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
 
 // Memory information and handle operations
-pub var cuMemGetInfo: *const fn (free_bytes: *c_ulonglong, total_bytes: *c_ulonglong) callconv(.c) CUresult = undefined;
-pub var cuMemGetHandle: *const fn (handle: ?*anyopaque, flags: c_uint, dev_ptr: *const anyopaque, size: c_size_t) callconv(.c) CUresult = undefined;
+pub var cuMemGetInfo: ?*const fn (free_bytes: *c_ulonglong, total_bytes: *c_ulonglong) callconv(.c) CUresult = null;
+pub var cuMemGetHandle: ?*const fn (handle: ?*anyopaque, flags: c_uint, dev_ptr: *const anyopaque, size: c_size_t) callconv(.c) CUresult = null;
 
 // Modules
-pub var cuModuleLoad: *const fn (pmodule: *?*CUmodule, fname: [*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuModuleLoadData: *const fn (pmodule: *?*CUmodule, image: [*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuModuleUnload: *const fn (module: *CUmodule) callconv(.c) CUresult = undefined;
-pub var cuCtxCreate: *const fn (pctx: *?*CUcontext, flags: c_uint, device: CUdevice) callconv(.c) CUresult = undefined;
-pub var cuCtxDestroy: *const fn (ctx: *CUcontext) callconv(.c) CUresult = undefined;
-pub var cuCtxSetCurrent: *const fn (ctx: *CUcontext) callconv(.c) CUresult = undefined;
-pub var cuCtxGetCurrent: *const fn (pctx: *?*CUcontext) callconv(.c) CUresult = undefined;
-pub var cuCtxPushCurrent: *const fn (ctx: *CUcontext) callconv(.c) CUresult = undefined;
-pub var cuCtxPopCurrent: *const fn (pctx: *?*CUcontext, flags: c_uint) callconv(.c) CUresult = undefined;
-pub var cuModuleGetFunction: *const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
+pub var cuModuleLoad: ?*const fn (pmodule: *?*CUmodule, fname: [*:0]const c_char) callconv(.c) CUresult = null;
+pub var cuModuleLoadData: ?*const fn (pmodule: *?*CUmodule, image: [*:0]const c_char) callconv(.c) CUresult = null;
+pub var cuModuleUnload: ?*const fn (module: *CUmodule) callconv(.c) CUresult = null;
+pub var cuCtxCreate: ?*const fn (pctx: *?*CUcontext, flags: c_uint, device: CUdevice) callconv(.c) CUresult = null;
+pub var cuCtxDestroy: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
+pub var cuCtxSetCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
+pub var cuCtxGetCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
+pub var cuCtxPushCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
+pub var cuCtxPopCurrent: ?*const fn (pctx: *?*CUcontext, flags: c_uint) callconv(.c) CUresult = null;
+pub var cuModuleGetFunction: ?*const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 
 // Additional Module & Kernel Management Functions
-pub var cuModuleGetGlobal: *const fn (pglobal: *?*anyopaque, pbytesize: *c_size_t, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuModuleGetTexRef: *const fn (ptref: *?*anyopaque, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = undefined;
-pub var cuModuleLaunch: *const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = undefined;
-pub var cuModuleLaunchCooperative: *const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = undefined;
-pub var cuFuncSetCache: *const fn (function: *CUfunction, cache_config: c_int) callconv(.c) CUresult = undefined;
-pub var cuFuncSetSharedMem: *const fn (function: *CUfunction, bytes: c_uint) callconv(.c) CUresult = undefined;
+pub var cuModuleGetGlobal: ?*const fn (pglobal: *?*anyopaque, pbytesize: *c_size_t, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
+pub var cuModuleGetTexRef: ?*const fn (ptref: *?*anyopaque, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
+pub var cuModuleLaunch: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = null;
+pub var cuModuleLaunchCooperative: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = null;
+pub var cuFuncSetCache: ?*const fn (function: *CUfunction, cache_config: c_int) callconv(.c) CUresult = null;
+pub var cuFuncSetSharedMem: ?*const fn (function: *CUfunction, bytes: c_uint) callconv(.c) CUresult = null;
 
 // Stream Management Functions
-pub var cuStreamCreate: *const fn (pstream: *?*CUstream, flags: c_uint) callconv(.c) CUresult = undefined;
-pub var cuStreamDestroy: *const fn (stream: *CUstream) callconv(.c) CUresult = undefined;
-pub var cuStreamQuery: *const fn (stream: *CUstream) callconv(.c) CUresult = undefined;
-pub var cuStreamSynchronize: *const fn (stream: *CUstream) callconv(.c) CUresult = undefined;
-pub var cuStreamAddCallback: *const fn (stream: *CUstream, callback: *anyopaque, userdata: ?*anyopaque, flags: c_uint) callconv(.c) CUresult = undefined;
-pub var cuStreamBeginCapture: *const fn (stream: *CUstream, mode: c_int) callconv(.c) CUresult = undefined;
-pub var cuStreamEndCapture: *const fn (pstream_count: *?*[]*CUstream, stream: *CUstream) callconv(.c) CUresult = undefined;
-pub var cuStreamGetCaptureState: *const fn (state: *c_int, stream: *CUstream) callconv(.c) CUresult = undefined;
+pub var cuStreamCreate: ?*const fn (pstream: *?*CUstream, flags: c_uint) callconv(.c) CUresult = null;
+pub var cuStreamDestroy: ?*const fn (stream: *CUstream) callconv(.c) CUresult = null;
+pub var cuStreamQuery: ?*const fn (stream: *CUstream) callconv(.c) CUresult = null;
+pub var cuStreamSynchronize: ?*const fn (stream: *CUstream) callconv(.c) CUresult = null;
+pub var cuStreamAddCallback: ?*const fn (stream: *CUstream, callback: *anyopaque, userdata: ?*anyopaque, flags: c_uint) callconv(.c) CUresult = null;
+pub var cuStreamBeginCapture: ?*const fn (stream: *CUstream, mode: c_int) callconv(.c) CUresult = null;
+pub var cuStreamEndCapture: ?*const fn (pstream_count: *?*[]*CUstream, stream: *CUstream) callconv(.c) CUresult = null;
+pub var cuStreamGetCaptureState: ?*const fn (state: *c_int, stream: *CUstream) callconv(.c) CUresult = null;
 
 // Event Management Functions
-pub var cuEventCreate: *const fn (pEvent: *?*CUevent, flags: c_uint) callconv(.c) CUresult = undefined;
-pub var cuEventDestroy: *const fn (event: *CUevent) callconv(.c) CUresult = undefined;
-pub var cuEventRecord: *const fn (event: *CUevent, stream: ?*CUstream) callconv(.c) CUresult = undefined;
-pub var cuEventSynchronize: *const fn (event: *CUevent) callconv(.c) CUresult = undefined;
+pub var cuEventCreate: ?*const fn (pEvent: *?*CUevent, flags: c_uint) callconv(.c) CUresult = null;
+pub var cuEventDestroy: ?*const fn (event: *CUevent) callconv(.c) CUresult = null;
+pub var cuEventRecord: ?*const fn (event: *CUevent, stream: ?*CUstream) callconv(.c) CUresult = null;
+pub var cuEventSynchronize: ?*const fn (event: *CUevent) callconv(.c) CUresult = null;
 
 pub fn load() !void {
     if (lib != null) return;
@@ -214,176 +215,111 @@ pub fn load() !void {
     const l = &lib.?;
 
     // Helper to lookup
-    cuInit = l.lookup(@TypeOf(cuInit), "cuInit") orelse return error.SymbolNotFound;
-    cuDriverGetVersion = l.lookup(@TypeOf(cuDriverGetVersion), "cuDriverGetVersion") orelse return error.SymbolNotFound;
-    cuDeviceGetCount = l.lookup(@TypeOf(cuDeviceGetCount), "cuDeviceGetCount") orelse return error.SymbolNotFound;
-    cuDeviceGetProperties = l.lookup(@TypeOf(cuDeviceGetProperties), "cuDeviceGetProperties") orelse return error.SymbolNotFound;
-    cuDeviceGetName = l.lookup(@TypeOf(cuDeviceGetName), "cuDeviceGetName") orelse return error.SymbolNotFound;
+    cuInit = l.lookup(@TypeOf(cuInit.?), "cuInit") orelse return error.SymbolNotFound;
+    cuDriverGetVersion = l.lookup(@TypeOf(cuDriverGetVersion.?), "cuDriverGetVersion") orelse return error.SymbolNotFound;
+    cuDeviceGetCount = l.lookup(@TypeOf(cuDeviceGetCount.?), "cuDeviceGetCount") orelse return error.SymbolNotFound;
+    cuDeviceGetProperties = l.lookup(@TypeOf(cuDeviceGetProperties.?), "cuDeviceGetProperties") orelse return error.SymbolNotFound;
+    cuDeviceGetName = l.lookup(@TypeOf(cuDeviceGetName.?), "cuDeviceGetName") orelse return error.SymbolNotFound;
 
-    // Check if cuDeviceComputeCapability exists (might be version dependent)
-    if (l.lookup(@TypeOf(cuDeviceComputeCapability), "cuDeviceComputeCapability")) |fn_ptr| {
-        cuDeviceComputeCapability = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuDeviceTotalMem), "cuDeviceTotalMem")) |fn_ptr| {
-        cuDeviceTotalMem = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuDeviceTotalMem), "cuDeviceTotalMem_v2")) |fn_ptr| {
-        cuDeviceTotalMem = fn_ptr;
-    }
+    cuGetErrorName = l.lookup(@TypeOf(cuGetErrorName.?), "cuGetErrorName") orelse return error.SymbolNotFound;
+    cuGetErrorString = l.lookup(@TypeOf(cuGetErrorString.?), "cuGetErrorString") orelse return error.SymbolNotFound;
 
-    // Error functions
-    cuGetErrorName = l.lookup(@TypeOf(cuGetErrorName), "cuGetErrorName") orelse return error.SymbolNotFound;
-    cuGetErrorString = l.lookup(@TypeOf(cuGetErrorString), "cuGetErrorString") orelse return error.SymbolNotFound;
+    cuMemAllocHost = l.lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost") orelse
+        l.lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
+    cuMemFreeHost = l.lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost") orelse return error.SymbolNotFound;
 
-    // Memory
-    cuMemAllocHost = l.lookup(@TypeOf(cuMemAllocHost), "cuMemAllocHost") orelse
-        l.lookup(@TypeOf(cuMemAllocHost), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
-    cuMemFreeHost = l.lookup(@TypeOf(cuMemFreeHost), "cuMemFreeHost") orelse return error.SymbolNotFound;
+    cuMemAlloc = l.lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc") orelse
+        l.lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc_v2") orelse return error.SymbolNotFound;
 
-    cuMemAlloc = l.lookup(@TypeOf(cuMemAlloc), "cuMemAlloc") orelse
-        l.lookup(@TypeOf(cuMemAlloc), "cuMemAlloc_v2") orelse return error.SymbolNotFound;
+    cuMemFree = l.lookup(@TypeOf(cuMemFree.?), "cuMemFree") orelse
+        l.lookup(@TypeOf(cuMemFree.?), "cuMemFree_v2") orelse return error.SymbolNotFound;
 
-    cuMemFree = l.lookup(@TypeOf(cuMemFree), "cuMemFree") orelse
-        l.lookup(@TypeOf(cuMemFree), "cuMemFree_v2") orelse return error.SymbolNotFound;
+    cuMemcpyHtoD = l.lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse
+        l.lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
 
-    cuMemcpyHtoD = l.lookup(@TypeOf(cuMemcpyHtoD), "cuMemcpyHtoD") orelse
-        l.lookup(@TypeOf(cuMemcpyHtoD), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
+    cuMemcpyDtoH = l.lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse
+        l.lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
 
-    cuMemcpyDtoH = l.lookup(@TypeOf(cuMemcpyDtoH), "cuMemcpyDtoH") orelse
-        l.lookup(@TypeOf(cuMemcpyDtoH), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
+    cuMemcpyDtoD = l.lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse
+        l.lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
 
-    cuMemcpyDtoD = l.lookup(@TypeOf(cuMemcpyDtoD), "cuMemcpyDtoD") orelse
-        l.lookup(@TypeOf(cuMemcpyDtoD), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
+    // Helper lookups
+    cuDeviceComputeCapability = l.lookup(@TypeOf(cuDeviceComputeCapability.?), "cuDeviceComputeCapability");
+    cuDeviceGetAttribute = l.lookup(@TypeOf(cuDeviceGetAttribute.?), "cuDeviceGetAttribute");
+
+    cuDeviceTotalMem = l.lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem") orelse
+        l.lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem_v2");
 
     // Async memory operations (optional - may not exist on older CUDA versions)
-    if (l.lookup(@TypeOf(cuMemcpyHtoDAsync), "cuMemcpyHtoDAsync")) |fn_ptr| {
-        cuMemcpyHtoDAsync = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuMemcpyDtoHAsync), "cuMemcpyDtoHAsync")) |fn_ptr| {
-        cuMemcpyDtoHAsync = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuMemcpyDtoDAsync), "cuMemcpyDtoDAsync")) |fn_ptr| {
-        cuMemcpyDtoDAsync = fn_ptr;
-    }
+    cuMemcpyHtoDAsync = l.lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync");
+    cuMemcpyDtoHAsync = l.lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync");
+    cuMemcpyDtoDAsync = l.lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync");
 
     // Memory information and handle operations
-    if (l.lookup(@TypeOf(cuMemGetInfo), "cuMemGetInfo")) |fn_ptr| {
-        cuMemGetInfo = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuMemGetHandle), "cuMemGetHandle_v1") orelse 
-         l.lookup(@TypeOf(cuMemGetHandle), "cuMemGetHandle_v2")) |fn_ptr| {
-        cuMemGetHandle = fn_ptr;
-    }
+    cuMemGetInfo = l.lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
+    cuMemGetHandle = l.lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v1") orelse
+        l.lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v2");
 
     // Context management
-    cuCtxCreate = l.lookup(@TypeOf(cuCtxCreate), "cuCtxCreate") orelse return error.SymbolNotFound;
-    cuCtxDestroy = l.lookup(@TypeOf(cuCtxDestroy), "cuCtxDestroy") orelse return error.SymbolNotFound;
-    cuCtxSetCurrent = l.lookup(@TypeOf(cuCtxSetCurrent), "cuCtxSetCurrent") orelse return error.SymbolNotFound;
-    cuCtxGetCurrent = l.lookup(@TypeOf(cuCtxGetCurrent), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
-    cuCtxPushCurrent = l.lookup(@TypeOf(cuCtxPushCurrent), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
-    cuCtxPopCurrent = l.lookup(@TypeOf(cuCtxPopCurrent), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
-    
+    cuCtxCreate = l.lookup(@TypeOf(cuCtxCreate.?), "cuCtxCreate") orelse return error.SymbolNotFound;
+    cuCtxDestroy = l.lookup(@TypeOf(cuCtxDestroy.?), "cuCtxDestroy") orelse return error.SymbolNotFound;
+    cuCtxSetCurrent = l.lookup(@TypeOf(cuCtxSetCurrent.?), "cuCtxSetCurrent") orelse return error.SymbolNotFound;
+    cuCtxGetCurrent = l.lookup(@TypeOf(cuCtxGetCurrent.?), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
+    cuCtxPushCurrent = l.lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
+    cuCtxPopCurrent = l.lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
+
     // Modules
-    cuModuleLoad = l.lookup(@TypeOf(cuModuleLoad), "cuModuleLoad") orelse return error.SymbolNotFound;
-    cuModuleLoadData = l.lookup(@TypeOf(cuModuleLoadData), "cuModuleLoadData") orelse return error.SymbolNotFound;
-    cuModuleUnload = l.lookup(@TypeOf(cuModuleUnload), "cuModuleUnload") orelse return error.SymbolNotFound;
-    cuModuleGetFunction = l.lookup(@TypeOf(cuModuleGetFunction), "cuModuleGetFunction") orelse return error.SymbolNotFound;
+    cuModuleLoad = l.lookup(@TypeOf(cuModuleLoad.?), "cuModuleLoad") orelse return error.SymbolNotFound;
+    cuModuleLoadData = l.lookup(@TypeOf(cuModuleLoadData.?), "cuModuleLoadData") orelse return error.SymbolNotFound;
+    cuModuleUnload = l.lookup(@TypeOf(cuModuleUnload.?), "cuModuleUnload") orelse return error.SymbolNotFound;
+    cuModuleGetFunction = l.lookup(@TypeOf(cuModuleGetFunction.?), "cuModuleGetFunction") orelse return error.SymbolNotFound;
 
     // Additional Module & Kernel Management Functions
-    if (l.lookup(@TypeOf(cuModuleGetGlobal), "cuModuleGetGlobal")) |fn_ptr| {
-        cuModuleGetGlobal = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuModuleGetTexRef), "cuModuleGetTexRef")) |fn_ptr| {
-        cuModuleGetTexRef = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuModuleLaunch), "cuModuleLaunch")) |fn_ptr| {
-        cuModuleLaunch = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuModuleLaunchCooperative), "cuModuleLaunchCooperative")) |fn_ptr| {
-        cuModuleLaunchCooperative = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuFuncSetCache), "cuFuncSetCache")) |fn_ptr| {
-        cuFuncSetCache = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuFuncSetSharedMem), "cuFuncSetSharedMem")) |fn_ptr| {
-        cuFuncSetSharedMem = fn_ptr;
-    }
+    cuModuleGetGlobal = l.lookup(@TypeOf(cuModuleGetGlobal.?), "cuModuleGetGlobal");
+    cuModuleGetTexRef = l.lookup(@TypeOf(cuModuleGetTexRef.?), "cuModuleGetTexRef");
+    cuModuleLaunch = l.lookup(@TypeOf(cuModuleLaunch.?), "cuModuleLaunch");
+    cuModuleLaunchCooperative = l.lookup(@TypeOf(cuModuleLaunchCooperative.?), "cuModuleLaunchCooperative");
+    cuFuncSetCache = l.lookup(@TypeOf(cuFuncSetCache.?), "cuFuncSetCache");
+    cuFuncSetSharedMem = l.lookup(@TypeOf(cuFuncSetSharedMem.?), "cuFuncSetSharedMem");
 
     // Stream Management Functions
-    if (l.lookup(@TypeOf(cuStreamCreate), "cuStreamCreate") orelse l.lookup(@TypeOf(cuStreamCreate), "cuStreamCreate_v2")) |fn_ptr| {
-        cuStreamCreate = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamDestroy), "cuStreamDestroy")) |fn_ptr| {
-        cuStreamDestroy = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamQuery), "cuStreamQuery")) |fn_ptr| {
-        cuStreamQuery = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamSynchronize), "cuStreamSynchronize") orelse l.lookup(@TypeOf(cuStreamSynchronize), "cuStreamSynchronize_v2")) |fn_ptr| {
-        cuStreamSynchronize = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamAddCallback), "cuStreamAddCallback")) |fn_ptr| {
-        cuStreamAddCallback = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamBeginCapture), "cuStreamBeginCapture_v2") orelse l.lookup(@TypeOf(cuStreamBeginCapture), "cuStreamBeginCapture")) |fn_ptr| {
-        cuStreamBeginCapture = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamEndCapture), "cuStreamEndCapture_v2") orelse l.lookup(@TypeOf(cuStreamEndCapture), "cuStreamEndCapture")) |fn_ptr| {
-        cuStreamEndCapture = fn_ptr;
-    }
-    if (l.lookup(@TypeOf(cuStreamGetCaptureState), "cuStreamGetCaptureState")) |fn_ptr| {
-        cuStreamGetCaptureState = fn_ptr;
-    }
+    cuStreamCreate = l.lookup(@TypeOf(cuStreamCreate.?), "cuStreamCreate") orelse
+        l.lookup(@TypeOf(cuStreamCreate.?), "cuStreamCreate_v2");
+    cuStreamDestroy = l.lookup(@TypeOf(cuStreamDestroy.?), "cuStreamDestroy");
+    cuStreamQuery = l.lookup(@TypeOf(cuStreamQuery.?), "cuStreamQuery");
+    cuStreamSynchronize = l.lookup(@TypeOf(cuStreamSynchronize.?), "cuStreamSynchronize") orelse
+        l.lookup(@TypeOf(cuStreamSynchronize.?), "cuStreamSynchronize_v2");
+    cuStreamAddCallback = l.lookup(@TypeOf(cuStreamAddCallback.?), "cuStreamAddCallback");
+    cuStreamBeginCapture = l.lookup(@TypeOf(cuStreamBeginCapture.?), "cuStreamBeginCapture_v2") orelse
+        l.lookup(@TypeOf(cuStreamBeginCapture.?), "cuStreamBeginCapture");
+    cuStreamEndCapture = l.lookup(@TypeOf(cuStreamEndCapture.?), "cuStreamEndCapture_v2") orelse
+        l.lookup(@TypeOf(cuStreamEndCapture.?), "cuStreamEndCapture");
+    cuStreamGetCaptureState = l.lookup(@TypeOf(cuStreamGetCaptureState.?), "cuStreamGetCaptureState");
 
     // Event Management Functions
-    cuEventCreate = l.lookup(@TypeOf(cuEventCreate), "cuEventCreate") orelse return error.SymbolNotFound;
-    if (l.lookup(@TypeOf(cuEventDestroy), "cuEventDestroy")) |fn_ptr| {
-        cuEventDestroy = fn_ptr;
-    } else {
-        // Provide fallback - some CUDA versions might not have this
-        std.log.warn("cuEventDestroy not found, event cleanup will be skipped", .{});
-    }
-    if (l.lookup(@TypeOf(cuEventRecord), "cuEventRecord")) |fn_ptr| {
-        cuEventRecord = fn_ptr;
-    } else {
-        // Provide fallback - some CUDA versions might not have this
-        std.log.warn("cuEventRecord not found, event recording will be skipped", .{});
-    }
-    if (l.lookup(@TypeOf(cuEventSynchronize), "cuEventSynchronize") orelse l.lookup(@TypeOf(cuEventSynchronize), "cuEventSynchronize_v2")) |fn_ptr| {
-        cuEventSynchronize = fn_ptr;
-    } else {
-        // Provide fallback - some CUDA versions might not have this
-        std.log.warn("cuEventSynchronize not found, event synchronization will be skipped", .{});
-    }
+    cuEventCreate = l.lookup(@TypeOf(cuEventCreate.?), "cuEventCreate");
+    cuEventDestroy = l.lookup(@TypeOf(cuEventDestroy.?), "cuEventDestroy");
+    cuEventRecord = l.lookup(@TypeOf(cuEventRecord.?), "cuEventRecord");
+    cuEventSynchronize = l.lookup(@TypeOf(cuEventSynchronize.?), "cuEventSynchronize") orelse
+        l.lookup(@TypeOf(cuEventSynchronize.?), "cuEventSynchronize_v2");
 }
 
-// ============================================================================
-// ZIG WRAPPER FUNCTIONS
-// ============================================================================
-
 pub fn init(flags: c_uint) errors.CUDAError!void {
-    load() catch |err| {
-        std.log.err("Failed to load CUDA library: {}", .{err});
-        return errors.CUDAError.Unknown;
-    };
+    try load();
 
-    const result = cuInit(flags);
-    if (result == CUDA_SUCCESS) {
-        return;
+    if (cuInit) |f| {
+        const result = f(flags);
+        if (result == CUDA_SUCCESS) return;
+        if (result != 0) std.log.err("cuInit failed with code: {d}", .{result});
+        return errors.cudaError(result);
     }
-
-    // Log unexpected result to help debugging
-    if (result != 0) {
-        std.log.err("cuInit failed with code: {}", .{result});
-    }
-
-    return errors.cudaError(result);
+    return errors.CUDAError.Unknown;
 }
 
 /// Get CUDA driver version
 pub fn getVersion() errors.CUDAError![2]c_int {
     var driver_version: c_int = undefined;
-    const result = cuDriverGetVersion(&driver_version);
+    const result = cuDriverGetVersion.?(&driver_version);
     if (result != CUDA_SUCCESS) {
         return errors.cudaError(result);
     }
@@ -398,17 +334,20 @@ pub fn getVersion() errors.CUDAError![2]c_int {
 /// Get number of CUDA devices
 pub fn getDeviceCount() errors.CUDAError!c_int {
     var count: c_int = undefined;
-    const result = cuDeviceGetCount(&count);
-    if (result == CUDA_SUCCESS) {
-        return count;
+    if (cuDeviceGetCount) |f| {
+        const result = f(&count);
+        if (result == CUDA_SUCCESS) {
+            return count;
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return errors.CUDAError.Unknown;
 }
 
 /// Allocate device memory
 pub fn allocDeviceMemory(size: c_size_t) errors.CUDAError!*anyopaque {
     var ptr: ?*anyopaque = null;
-    const result = cuMemAlloc(&ptr, size);
+    const result = cuMemAlloc.?(&ptr, size);
     if (result == CUDA_SUCCESS) {
         return ptr.?;
     }
@@ -417,7 +356,7 @@ pub fn allocDeviceMemory(size: c_size_t) errors.CUDAError!*anyopaque {
 
 /// Free device memory
 pub fn freeDeviceMemory(ptr: *anyopaque) errors.CUDAError!void {
-    const result = cuMemFree(ptr);
+    const result = cuMemFree.?(ptr);
     if (result == CUDA_SUCCESS) {
         return;
     }
@@ -427,7 +366,7 @@ pub fn freeDeviceMemory(ptr: *anyopaque) errors.CUDAError!void {
 /// Allocate pinned host memory
 pub fn allocHost(size: c_size_t) errors.CUDAError!*anyopaque {
     var ptr: ?*anyopaque = null;
-    const result = cuMemAllocHost(&ptr, size);
+    const result = cuMemAllocHost.?(&ptr, size);
     if (result == CUDA_SUCCESS) {
         return ptr.?;
     }
@@ -436,7 +375,7 @@ pub fn allocHost(size: c_size_t) errors.CUDAError!*anyopaque {
 
 /// Free pinned host memory
 pub fn freeHost(ptr: *anyopaque) errors.CUDAError!void {
-    const result = cuMemFreeHost(ptr);
+    const result = cuMemFreeHost.?(ptr);
     if (result == CUDA_SUCCESS) {
         return;
     }
@@ -445,7 +384,7 @@ pub fn freeHost(ptr: *anyopaque) errors.CUDAError!void {
 
 /// Copy memory from host to device
 pub fn copyHostToDevice(dst: *anyopaque, host_src: []const u8) errors.CUDAError!void {
-    const result = cuMemcpyHtoD(dst, host_src.ptr, host_src.len);
+    const result = cuMemcpyHtoD.?(dst, host_src.ptr, host_src.len);
     if (result == CUDA_SUCCESS) {
         return;
     }
@@ -454,7 +393,7 @@ pub fn copyHostToDevice(dst: *anyopaque, host_src: []const u8) errors.CUDAError!
 
 /// Copy memory from device to host
 pub fn copyDeviceToHost(host_dst: []u8, device_src: *const anyopaque) errors.CUDAError!void {
-    const result = cuMemcpyDtoH(host_dst.ptr, device_src, host_dst.len);
+    const result = cuMemcpyDtoH.?(host_dst.ptr, device_src, host_dst.len);
     if (result == CUDA_SUCCESS) {
         return;
     }
@@ -463,7 +402,7 @@ pub fn copyDeviceToHost(host_dst: []u8, device_src: *const anyopaque) errors.CUD
 
 /// Copy memory from device to device
 pub fn copyDeviceToDevice(dst: *anyopaque, src: *const anyopaque, size: c_size_t) errors.CUDAError!void {
-    const result = cuMemcpyDtoD(dst, src, size);
+    const result = cuMemcpyDtoD.?(dst, src, size);
     if (result == CUDA_SUCCESS) {
         return;
     }
@@ -481,7 +420,7 @@ pub fn copyHostToDeviceAsync(dst: *anyopaque, host_src: []const u8, stream: ?*CU
     } else {
         // Fallback to synchronous copy
         std.log.warn("Async memory operations not available, falling back to synchronous", .{});
-        const result = cuMemcpyHtoD(dst, host_src.ptr, host_src.len);
+        const result = cuMemcpyHtoD.?(dst, host_src.ptr, host_src.len);
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -491,8 +430,8 @@ pub fn copyHostToDeviceAsync(dst: *anyopaque, host_src: []const u8, stream: ?*CU
 
 /// Copy memory from device to host asynchronously
 pub fn copyDeviceToHostAsync(host_dst: []u8, device_src: *const anyopaque, stream: ?*CUstream) errors.CUDAError!void {
-    if (cuMemcpyDtoHAsync != undefined and cuMemcpyDtoHAsync != null) {
-        const result = @as(*const fn (*anyopaque, *const anyopaque, usize, ?*CUstream) callconv(.c) CUresult, @ptrCast(cuMemcpyDtoHAsync))(host_dst.ptr, device_src, host_dst.len, stream);
+    if (cuMemcpyDtoHAsync) |f| {
+        const result = f(host_dst.ptr, device_src, host_dst.len, stream);
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -500,7 +439,7 @@ pub fn copyDeviceToHostAsync(host_dst: []u8, device_src: *const anyopaque, strea
     } else {
         // Fallback to synchronous copy
         std.log.warn("Async memory operations not available, falling back to synchronous", .{});
-        const result = cuMemcpyDtoH(host_dst.ptr, device_src, host_dst.len);
+        const result = cuMemcpyDtoH.?(host_dst.ptr, device_src, host_dst.len);
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -510,8 +449,8 @@ pub fn copyDeviceToHostAsync(host_dst: []u8, device_src: *const anyopaque, strea
 
 /// Copy memory from device to device asynchronously
 pub fn copyDeviceToDeviceAsync(dst: *anyopaque, src: *const anyopaque, size: c_size_t, stream: ?*CUstream) errors.CUDAError!void {
-    if (cuMemcpyDtoDAsync != undefined and cuMemcpyDtoDAsync != null) {
-        const result = @as(*const fn (*anyopaque, *const anyopaque, usize, ?*CUstream) callconv(.c) CUresult, @ptrCast(cuMemcpyDtoDAsync))(dst, src, size, stream);
+    if (cuMemcpyDtoDAsync) |f| {
+        const result = f(dst, src, size, stream);
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -519,7 +458,7 @@ pub fn copyDeviceToDeviceAsync(dst: *anyopaque, src: *const anyopaque, size: c_s
     } else {
         // Fallback to synchronous copy
         std.log.warn("Async memory operations not available, falling back to synchronous", .{});
-        const result = cuMemcpyDtoD(dst, src, size);
+        const result = cuMemcpyDtoD.?(dst, src, size);
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -531,10 +470,9 @@ pub fn copyDeviceToDeviceAsync(dst: *anyopaque, src: *const anyopaque, size: c_s
 pub fn getDeviceMemoryInfo() errors.CUDAError!struct { free: c_ulonglong, total: c_ulonglong } {
     var free_bytes: c_ulonglong = undefined;
     var total_bytes: c_ulonglong = undefined;
-    
-    if (cuMemGetInfo != undefined and cuMemGetInfo != null) {
-        const fn_ptr = @as(*const fn (*c_ulonglong, *c_ulonglong) callconv(.c) CUresult, @ptrCast(cuMemGetInfo));
-        const result = fn_ptr(&free_bytes, &total_bytes);
+
+    if (cuMemGetInfo) |f| {
+        const result = f(&free_bytes, &total_bytes);
         if (result == CUDA_SUCCESS) {
             return .{ .free = free_bytes, .total = total_bytes };
         }
@@ -546,14 +484,13 @@ pub fn getDeviceMemoryInfo() errors.CUDAError!struct { free: c_ulonglong, total:
     }
 }
 
-/// Get memory handle for device pointer  
+/// Get memory handle for device pointer
 pub fn getMemoryHandle(dev_ptr: *const anyopaque, size: c_size_t) errors.CUDAError!*anyopaque {
     var handle: ?*anyopaque = null;
-    
-    if (cuMemGetHandle != undefined and cuMemGetHandle != null) {
+
+    if (cuMemGetHandle) |f| {
         const flags: c_uint = 0; // Default flags
-        const fn_ptr = @as(*const fn (*?*anyopaque, c_uint, *const anyopaque, usize) callconv(.c) CUresult, @ptrCast(cuMemGetHandle));
-        const result = fn_ptr(&handle, flags, dev_ptr, size);
+        const result = f(&handle, flags, dev_ptr, size);
         if (result == CUDA_SUCCESS) {
             return handle.?;
         }
@@ -561,8 +498,7 @@ pub fn getMemoryHandle(dev_ptr: *const anyopaque, size: c_size_t) errors.CUDAErr
     } else {
         // Fallback - for unsupported systems, just cast away constness
         std.log.warn("cuMemGetHandle not available on this system", .{});
-        @constCast(dev_ptr); // Use as-is
-        return dev_ptr;
+        return @constCast(dev_ptr);
     }
 }
 
@@ -573,7 +509,7 @@ pub fn getMemoryHandle(dev_ptr: *const anyopaque, size: c_size_t) errors.CUDAErr
 /// Backward compatibility alias for allocDeviceMemory
 pub const alloc = allocDeviceMemory;
 
-/// Backward compatibility alias for freeDeviceMemory  
+/// Backward compatibility alias for freeDeviceMemory
 pub const free = freeDeviceMemory;
 
 /// Backward compatibility alias for copyHostToDevice
@@ -585,7 +521,7 @@ pub const copyDtoH = copyDeviceToHost;
 /// Get device properties
 pub fn getDeviceProperties(device: CUdevice) errors.CUDAError!CUdevprop {
     var prop: CUdevprop = undefined;
-    const result = cuDeviceGetProperties(&prop, device);
+    const result = cuDeviceGetProperties.?(&prop, device);
     if (result == CUDA_SUCCESS) {
         return prop;
     }
@@ -597,7 +533,7 @@ pub fn getDeviceName(device: CUdevice, allocator: std.mem.Allocator) ![]u8 {
     var buffer: [256]u8 = undefined;
     // Cast buffer pointer to [*:0]c_char expected by C ABI
     const ptr = @as([*:0]c_char, @ptrCast(&buffer));
-    const result = cuDeviceGetName(ptr, 256, device);
+    const result = cuDeviceGetName.?(ptr, 256, device);
 
     if (result != CUDA_SUCCESS) {
         return errors.cudaError(result);
@@ -612,27 +548,42 @@ pub fn getDeviceName(device: CUdevice, allocator: std.mem.Allocator) ![]u8 {
 pub fn getComputeCapability(device: CUdevice) errors.CUDAError!struct { major: c_int, minor: c_int } {
     var major: c_int = undefined;
     var minor: c_int = undefined;
-    const result = cuDeviceComputeCapability(&major, &minor, device);
-    if (result == CUDA_SUCCESS) {
+
+    if (cuDeviceComputeCapability) |f| {
+        const result = f(&major, &minor, device);
+        if (result == CUDA_SUCCESS) {
+            return .{ .major = major, .minor = minor };
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback using attributes if capability function is missing
+        major = 0;
+        minor = 0;
+        if (cuDeviceGetAttribute) |f| {
+            _ = f(&major, 75, device); // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75
+            _ = f(&minor, 76, device); // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76
+        }
         return .{ .major = major, .minor = minor };
     }
-    return errors.cudaError(result);
 }
 
 /// Get total device memory
 pub fn getTotalMem(device: CUdevice) errors.CUDAError!usize {
     var bytes: c_ulonglong = undefined;
-    const result = cuDeviceTotalMem(&bytes, device);
-    if (result == CUDA_SUCCESS) {
-        return @as(usize, @intCast(bytes));
+    if (cuDeviceTotalMem) |f| {
+        const result = f(&bytes, device);
+        if (result == CUDA_SUCCESS) {
+            return @as(usize, @intCast(bytes));
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return error.NotSupported;
 }
 
 /// Get error name
 pub fn getErrorName(error_code: CUresult) ![]const u8 {
     var ptr: [*:0]const c_char = undefined;
-    const result = cuGetErrorName(error_code, &ptr);
+    const result = cuGetErrorName.?(error_code, &ptr);
     if (result == CUDA_SUCCESS) {
         const span = std.mem.span(ptr);
         return @ptrCast(span);
@@ -643,7 +594,7 @@ pub fn getErrorName(error_code: CUresult) ![]const u8 {
 /// Get error string
 pub fn getErrorString(error_code: CUresult) ![]const u8 {
     var ptr: [*:0]const c_char = undefined;
-    const result = cuGetErrorString(error_code, &ptr);
+    const result = cuGetErrorString.?(error_code, &ptr);
     if (result == CUDA_SUCCESS) {
         const span = std.mem.span(ptr);
         return @ptrCast(span);
@@ -654,59 +605,98 @@ pub fn getErrorString(error_code: CUresult) ![]const u8 {
 /// Create a new CUDA context
 pub fn createContext(flags: c_uint, device: CUdevice) errors.CUDAError!*CUcontext {
     var ctx_handle: ?*CUcontext = null;
-    const result = cuCtxCreate(&ctx_handle, flags, device);
-    if (result == CUDA_SUCCESS) {
-        return ctx_handle.?;
+    
+    if (cuCtxCreate != null) {
+        const result = @as(*const fn (*?*CUcontext, c_uint, c_int) callconv(.c) CUresult, @ptrCast(cuCtxCreate))(&ctx_handle, flags, device);
+        if (result == CUDA_SUCCESS) {
+            return ctx_handle.?;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - context creation not available
+        std.log.warn("cuCtxCreate not available on this system", .{});
+        return error.SymbolNotFound;
     }
-    return errors.cudaError(result);
 }
 
 /// Destroy a CUDA context
 pub fn destroyContext(ctx: *CUcontext) errors.CUDAError!void {
-    const result = cuCtxDestroy(ctx);
-    if (result == CUDA_SUCCESS) {
-        return;
+    if (cuCtxDestroy != null) {
+        const result = @as(*const fn (*CUcontext) callconv(.c) CUresult, @ptrCast(cuCtxDestroy))(ctx);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - context destruction not available
+        std.log.warn("cuCtxDestroy not available on this system", .{});
+        return error.SymbolNotFound;
     }
-    return errors.cudaError(result);
 }
 
 /// Set the current CUDA context
 pub fn setCurrentContext(ctx: *CUcontext) errors.CUDAError!void {
-    const result = cuCtxSetCurrent(ctx);
-    if (result == CUDA_SUCCESS) {
-        return;
+    if (cuCtxSetCurrent != null) {
+        const result = @as(*const fn (*CUcontext) callconv(.c) CUresult, @ptrCast(cuCtxSetCurrent))(ctx);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - context setting not available
+        std.log.warn("cuCtxSetCurrent not available on this system", .{});
+        return error.SymbolNotFound;
     }
-    return errors.cudaError(result);
 }
 
 /// Get the current CUDA context
 pub fn getCurrentContext() errors.CUDAError!*CUcontext {
     var ctx_handle: ?*CUcontext = null;
-    const result = cuCtxGetCurrent(&ctx_handle);
-    if (result == CUDA_SUCCESS) {
-        return ctx_handle.?;
+    
+    if (cuCtxGetCurrent != null) {
+        const result = @as(*const fn (*?*CUcontext) callconv(.c) CUresult, @ptrCast(cuCtxGetCurrent))(&ctx_handle);
+        if (result == CUDA_SUCCESS) {
+            return ctx_handle.?;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - context query not available
+        std.log.warn("cuCtxGetCurrent not available on this system", .{});
+        return error.SymbolNotFound;
     }
-    return errors.cudaError(result);
 }
 
 /// Push context onto the stack
 pub fn pushContext(ctx: *CUcontext) errors.CUDAError!void {
-    const result = cuCtxPushCurrent(ctx);
-    if (result == CUDA_SUCCESS) {
-        return;
+    if (cuCtxPushCurrent != null) {
+        const result = @as(*const fn (*CUcontext) callconv(.c) CUresult, @ptrCast(cuCtxPushCurrent))(ctx);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - context push not available
+        std.log.warn("cuCtxPushCurrent not available on this system", .{});
+        return error.SymbolNotFound;
     }
-    return errors.cudaError(result);
 }
 
-/// Pop context from the stack  
+/// Pop context from the stack
 pub fn popContext() errors.CUDAError!*CUcontext {
     var ctx_handle: ?*CUcontext = null;
     const flags: c_uint = 0;
-    const result = cuCtxPopCurrent(&ctx_handle, flags);
-    if (result == CUDA_SUCCESS) {
-        return ctx_handle.?;
+    
+    if (cuCtxPopCurrent != null) {
+        const result = @as(*const fn (*?*CUcontext, c_uint) callconv(.c) CUresult, @ptrCast(cuCtxPopCurrent))(&ctx_handle, flags);
+        if (result == CUDA_SUCCESS) {
+            return ctx_handle.?;
+        }
+        return errors.cudaError(result);
+    } else {
+        // Fallback - context pop not available
+        std.log.warn("cuCtxPopCurrent not available on this system", .{});
+        return error.SymbolNotFound;
     }
-    return errors.cudaError(result);
 }
 
 // ============================================================================
@@ -756,7 +746,7 @@ pub fn getFunctionFromModule(module: *CUmodule, name: [:0]const c_char) errors.C
 pub fn getGlobalFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!struct { ptr: *anyopaque, size: c_size_t } {
     var global_ptr: ?*anyopaque = null;
     var bytesize: c_size_t = undefined;
-    
+
     if (cuModuleGetGlobal != undefined and cuModuleGetGlobal != null) {
         const fn_ptr = @as(*const fn (*?*anyopaque, *c_size_t, *CUmodule, [*:0]const c_char) callconv(.c) CUresult, @ptrCast(cuModuleGetGlobal));
         const result = fn_ptr(&global_ptr, &bytesize, module, name);
@@ -771,7 +761,7 @@ pub fn getGlobalFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUD
     }
 }
 
-/// Get texture reference from module  
+/// Get texture reference from module
 pub fn getTextureFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!*anyopaque {
     if (cuModuleGetTexRef != undefined and cuModuleGetTexRef != null) {
         var tex_ref: ?*anyopaque = null;
@@ -789,37 +779,19 @@ pub fn getTextureFromModule(module: *CUmodule, name: [:0]const c_char) errors.CU
 }
 
 /// Launch kernel synchronously from module
-pub fn launchKernel(
-    function: *CUfunction,
-    grid_dim_x: c_uint,
-    grid_dim_y: c_uint,
-    block_dim_x: c_uint,
-    block_dim_y: c_uint,
-    block_dim_z: c_uint,
-    shared_mem_bytes: c_uint,
-    stream: ?*CUstream,
-    kernel_params: []?*anyopaque
-) errors.CUDAError!void {
-    
+pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uint, block_dim_x: c_uint, block_dim_y: c_uint, block_dim_z: c_uint, shared_mem_bytes: c_uint, stream: ?*CUstream, kernel_params: []?*anyopaque) errors.CUDAError!void {
     if (cuModuleLaunch != undefined and cuModuleLaunch != null) {
         const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]?*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunch));
-        
+
         // Convert slice to C array
         var params_array: [32]?*anyopaque = undefined; // Max 32 parameters
         const param_count = @min(kernel_params.len, 32);
         for (0..param_count) |i| {
             params_array[i] = kernel_params[i];
         }
-        
-        const result = fn_ptr(
-            function,
-            grid_dim_x, grid_dim_y,
-            block_dim_x, block_dim_y, block_dim_z,
-            shared_mem_bytes,
-            stream,
-            &params_array
-        );
-        
+
+        const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, &params_array);
+
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -832,37 +804,19 @@ pub fn launchKernel(
 }
 
 /// Launch cooperative kernels from module
-pub fn launchCooperativeKernel(
-    function: *CUfunction,
-    grid_dim_x: c_uint,
-    grid_dim_y: c_uint,
-    block_dim_x: c_uint,
-    block_dim_y: c_uint,
-    block_dim_z: c_uint,
-    shared_mem_bytes: c_uint,
-    stream: ?*CUstream,
-    kernel_params: []?*anyopaque
-) errors.CUDAError!void {
-    
+pub fn launchCooperativeKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uint, block_dim_x: c_uint, block_dim_y: c_uint, block_dim_z: c_uint, shared_mem_bytes: c_uint, stream: ?*CUstream, kernel_params: []?*anyopaque) errors.CUDAError!void {
     if (cuModuleLaunchCooperative != undefined and cuModuleLaunchCooperative != null) {
         const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]?*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunchCooperative));
-        
+
         // Convert slice to C array
         var params_array: [32]?*anyopaque = undefined; // Max 32 parameters
         const param_count = @min(kernel_params.len, 32);
         for (0..param_count) |i| {
             params_array[i] = kernel_params[i];
         }
-        
-        const result = fn_ptr(
-            function,
-            grid_dim_x, grid_dim_y,
-            block_dim_x, block_dim_y, block_dim_z,
-            shared_mem_bytes,
-            stream,
-            &params_array
-        );
-        
+
+        const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, &params_array);
+
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -947,12 +901,7 @@ pub fn syncStream(stream: *CUstream) errors.CUDAError!void {
 }
 
 /// Add callback function to be called when stream completes
-pub fn addStreamCallback(
-    stream: *CUstream,
-    callback: *anyopaque, 
-    userdata: ?*anyopaque,
-    flags: c_uint
-) errors.CUDAError!void {
+pub fn addStreamCallback(stream: *CUstream, callback: *anyopaque, userdata: ?*anyopaque, flags: c_uint) errors.CUDAError!void {
     if (cuStreamAddCallback != undefined and cuStreamAddCallback != null) {
         const fn_ptr = @as(*const fn (*CUstream, *anyopaque, ?*anyopaque, c_uint) callconv(.c) CUresult, @ptrCast(cuStreamAddCallback));
         const result = fn_ptr(stream, callback, userdata, flags);
@@ -967,7 +916,7 @@ pub fn addStreamCallback(
     }
 }
 
-/// Begin capturing operations into a graph  
+/// Begin capturing operations into a graph
 pub fn beginCapture(stream: *CUstream, mode: c_int) errors.CUDAError!void {
     if (cuStreamBeginCapture != undefined and cuStreamBeginCapture != null) {
         const result = @as(*const fn (*CUstream, c_int) callconv(.c) CUresult, @ptrCast(cuStreamBeginCapture))(stream, mode);
@@ -982,27 +931,27 @@ pub fn beginCapture(stream: *CUstream, mode: c_int) errors.CUDAError!void {
     }
 }
 
-/// End capturing and get the captured streams  
+/// End capturing and get the captured streams
 pub fn endCapture(stream: *CUstream) errors.CUDAError!*[]*CUstream {
     if (cuStreamEndCapture != undefined and cuStreamEndCapture != null) {
         var stream_count: ?*c_int = null;
-        
+
         // First call to get number of streams
         const result1 = @as(*const fn (*?*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(&stream_count, stream);
         if (result1 == CUDA_SUCCESS and stream_count != null) {
             // Mark as used to avoid unused variable warning
             const count = stream_count.?;
             _ = count;
-            
+
             var streams: ?*[]*CUstream = undefined;
             // Second call to get the actual streams
             const result2 = @as(*const fn (*?*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(@ptrCast(&streams), stream);
-            
+
             if (result2 == CUDA_SUCCESS and streams != null) {
                 return &streams.?;
             }
         }
-        
+
         // If we get here, there was an issue with the capture
         const final_result = cuStreamQuery(stream);
         return errors.cudaError(final_result);
@@ -1016,7 +965,7 @@ pub fn endCapture(stream: *CUstream) errors.CUDAError!*[]*CUstream {
 /// Get current capture state of a stream
 pub fn getCaptureState(stream: *CUstream) errors.CUDAError!c_int {
     var state: c_int = undefined;
-    
+
     if (cuStreamGetCaptureState != undefined and cuStreamGetCaptureState != null) {
         const result = @as(*const fn (*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamGetCaptureState))(&state, stream);
         if (result == CUDA_SUCCESS) {
@@ -1039,11 +988,11 @@ pub fn createDefaultStream() errors.CUDAError!*CUstream {
 /// Create a non-blocking stream for async operations
 pub fn createNonBlockingStream() errors.CUDAError!*CUstream {
     // CU_STREAM_NON_BLOCKING flag (typically 1)
-    const flags: c_uint = 1; 
+    const flags: c_uint = 1;
     return createStream(flags);
 }
 
-/// Create a high-priority stream for time-critical operations  
+/// Create a high-priority stream for time-critical operations
 pub fn createHighPriorityStream() errors.CUDAError!*CUstream {
     // CU_STREAM_HIGH_PRIORITY flag (typically 2)
     const flags: c_uint = 2;
@@ -1130,7 +1079,3 @@ pub fn createBlockingEvent() errors.CUDAError!*CUevent {
 pub fn recordInDefaultStream(event: *CUevent) errors.CUDAError!void {
     return recordEvent(event, null);
 }
-
-
-
-
