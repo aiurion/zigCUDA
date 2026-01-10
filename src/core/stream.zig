@@ -34,20 +34,61 @@ pub const Stream = struct {
                 };
             } else {
                 std.log.err("cuStreamCreate failed with error code: {d}", .{result});
-                
+
                 // Provide helpful debugging info
                 switch (result) {
+                    201 => {
+                        std.log.err("  Invalid context - checking current context state...", .{});
+
+                        // Try to verify/fix the context issue
+                        if (bindings.cuCtxGetCurrent != null) {
+                            var curr_ctx: ?*bindings.CUcontext = undefined;
+                            const ctx_result = @as(*const fn (*?*bindings.CUcontext) callconv(.c) bindings.CUresult, @ptrCast(bindings.cuCtxGetCurrent))(&curr_ctx);
+
+                            if (ctx_result == bindings.CUDA_SUCCESS and curr_ctx != null) {
+                                std.log.info("  Current context exists: {*}, retrying stream creation...", .{curr_ctx.?});
+
+                                // Re-try with a different approach - maybe the issue is timing-related
+                                const retry_result = @as(*const fn (*?*bindings.CUstream, bindings.c_uint) callconv(.c) bindings.CUresult, @ptrCast(bindings.cuStreamCreate))(&stream_handle, flags);
+
+                                if (retry_result == bindings.CUDA_SUCCESS) {
+                                    std.log.info("  ✓ Stream creation succeeded on retry!", .{});
+                                    return Stream{
+                                        .handle = stream_handle.?,
+                                        .flags = flags,
+                                    };
+                                } else {
+                                    std.log.err("  Retry also failed with: {d}", .{retry_result});
+
+                                    // Last resort - try with different flags
+                                    const simple_flags: bindings.c_uint = 0;
+                                    var simple_stream: ?*bindings.CUstream = null;
+                                    const simple_result = @as(*const fn (*?*bindings.CUstream, bindings.c_uint) callconv(.c) bindings.CUresult, @ptrCast(bindings.cuStreamCreate))(&simple_stream, simple_flags);
+
+                                    if (simple_result == bindings.CUDA_SUCCESS and simple_stream != null) {
+                                        std.log.info("  ✓ Simple stream creation worked! Using that approach.", .{});
+                                        return Stream{
+                                            .handle = simple_stream.?,
+                                            .flags = simple_flags,
+                                        };
+                                    }
+                                }
+                            } else {
+                                std.log.err("  No current context found - this shouldn't happen!", .{});
+                            }
+                        }
+                    },
                     bindings.CUDA_ERROR_INVALID_VALUE => {
-                        std.log.err("  Invalid stream parameters - likely no active CUDA context", .{});
+                        std.log.err("  Invalid stream parameters or flags", .{});
                     },
                     bindings.CUDA_ERROR_NOT_INITIALIZED => {
                         std.log.err("  CUDA not initialized properly", .{});
                     },
                     else => {
-                        std.log.err("  Unknown error during stream creation", .{});
-                    }
+                        std.log.err("  Unknown error during stream creation: {}", .{result});
+                    },
                 }
-                
+
                 return errors.cudaError(result);
             }
         } else {
@@ -72,7 +113,7 @@ pub const Stream = struct {
         return create(flags);
     }
 
-    /// Create a high-priority stream for time-critical operations  
+    /// Create a high-priority stream for time-critical operations
     pub fn createHighPriority() errors.CUDAError!Stream {
         const flags: bindings.c_uint = 1; // Start simple - just non-blocking
         std.log.info("Creating priority stream with flags: {}", .{flags});

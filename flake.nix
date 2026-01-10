@@ -13,11 +13,11 @@
       in {
         devShells.default = pkgs.mkShell {
           buildInputs = [
-            pkgs.zig_0_15  # Use Zig 0.15 - upgraded version
-            pkgs.curl      # Added for curl in shell
+            pkgs.zig_0_15  
+            pkgs.curl 
           ];
           shellHook = ''
-            echo "Zig development environment ready (using 0.15.2)"
+            echo "Zig 0.15.2 development environment ready"
           '';
         };
       }
