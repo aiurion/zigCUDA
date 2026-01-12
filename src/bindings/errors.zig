@@ -44,6 +44,8 @@ pub const CUDAError = error{
     CudaLibraryNotFound,
     /// Symbol not found in library
     SymbolNotFound,
+    /// Feature not supported
+    NotSupported,
 };
 
 /// Map CUDA result to Zig error (assumes result is not success)

@@ -38,7 +38,7 @@ pub fn build(b: *std.Build) !void {
         "/lib64/ld-linux-x86-64.so.2",
     });
     run_cmd.addArtifactArg(exe_default);
-    
+
     run_cmd.step.dependOn(b.getInstallStep());
     if (b.args) |args| {
         run_cmd.addArgs(args);
@@ -46,4 +46,37 @@ pub fn build(b: *std.Build) !void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_cmd.step);
+
+    // Test configuration using Zig's built-in test infrastructure
+    // Create test module
+    const test_module = b.createModule(.{
+        .root_source_file = b.path("test/comprehensive_bindings_test.zig"),
+        .target = target,
+    });
+
+    // Create cuda module (errors.zig will be imported by cuda.zig via relative import)
+    const cuda_module = b.createModule(.{
+        .root_source_file = b.path("src/bindings/cuda.zig"),
+        .target = target,
+    });
+
+    // Add cuda to test module
+    test_module.addImport("cuda", cuda_module);
+
+    // Create test executable
+    const tests = b.addTest(.{
+        .root_module = test_module,
+    });
+
+    // Link against system libc (required for CUDA bindings)
+    tests.linkLibC();
+
+    // Use system dynamic linker to avoid glibc mismatch issues
+    const run_tests = b.addSystemCommand(&.{
+        "/lib64/ld-linux-x86-64.so.2",
+    });
+    run_tests.addArtifactArg(tests);
+
+    const test_step = b.step("test", "Run comprehensive binding tests");
+    test_step.dependOn(&run_tests.step);
 }

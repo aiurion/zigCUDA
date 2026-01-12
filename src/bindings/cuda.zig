@@ -5,6 +5,11 @@
 const std = @import("std");
 const errors = @import("errors.zig");
 
+// Use C's dlopen instead of Zig's DynLib for WSL compatibility
+const c = @cImport({
+    @cInclude("dlfcn.h");
+});
+
 pub const @"c_int" = c_int;
 pub const @"c_uint" = c_uint;
 pub const @"c_ulonglong" = c_ulonglong;
@@ -77,6 +82,7 @@ pub const CUevent = opaque {};
 pub const CUmodule = opaque {};
 pub const CUfunction = opaque {};
 pub const CUarray = opaque {};
+pub const CUgraph = opaque {};
 pub const CUdeviceptr = c_ulonglong;
 pub const CUarray3D = extern struct {
     pub const CUDA_3D = extern struct {
@@ -124,16 +130,41 @@ pub const CUmemoryAdvise = enum(c_int) {
     accessed_by_host = 3,
 };
 
+// Function attributes
+pub const CU_FUNC_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 0;
+pub const CU_FUNC_ATTRIBUTE_SHARED_SIZE_BYTES = 1;
+pub const CU_FUNC_ATTRIBUTE_CONST_SIZE_BYTES = 2;
+pub const CU_FUNC_ATTRIBUTE_LOCAL_SIZE_BYTES = 3;
+pub const CU_FUNC_ATTRIBUTE_NUM_REGS = 4;
+pub const CU_FUNC_ATTRIBUTE_PTX_VERSION = 5;
+pub const CU_FUNC_ATTRIBUTE_BINARY_VERSION = 6;
+pub const CU_FUNC_ATTRIBUTE_CACHE_MODE_CA = 7;
+pub const CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8;
+pub const CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT = 9;
+
+// Cache configuration
+pub const CU_FUNC_CACHE_PREFER_NONE = 0x00;
+pub const CU_FUNC_CACHE_PREFER_SHARED = 0x01;
+pub const CU_FUNC_CACHE_PREFER_L1 = 0x02;
+pub const CU_FUNC_CACHE_PREFER_EQUAL = 0x03;
+
+// Shared memory configuration
+pub const CU_SHARED_MEM_CONFIG_DEFAULT_BANK_SIZE = 0x00;
+pub const CU_SHARED_MEM_CONFIG_FOUR_BYTE_BANK_SIZE = 0x01;
+pub const CU_SHARED_MEM_CONFIG_EIGHT_BYTE_BANK_SIZE = 0x02;
+
 // ============================================================================
 // DYNAMIC LOADING & FUNCTION POINTERS
 // ============================================================================
 
-var lib: ?std.DynLib = null;
+var lib_handle: ?*anyopaque = null;
 
 // Function Pointers (using optional types for safety)
-pub var cuInit: ?*const fn (flags: c_uint) callconv(.c) CUresult = null;
+// WSL might use different signatures - try multiple
+pub var cuInit: ?*const fn (flags: c_int) callconv(.c) CUresult = null;
 pub var cuDriverGetVersion: ?*const fn (driver_version: *c_int) callconv(.c) CUresult = null;
 pub var cuDeviceGetCount: ?*const fn (count: *c_int) callconv(.c) CUresult = null;
+pub var cuDeviceGet: ?*const fn (device: *CUdevice, ordinal: c_int) callconv(.c) CUresult = null;
 pub var cuDeviceGetProperties: ?*const fn (device: *CUdevprop, device_id: c_int) callconv(.c) CUresult = null;
 pub var cuDeviceGetName: ?*const fn (name: [*:0]c_char, len: c_int, dev: CUdevice) callconv(.c) CUresult = null;
 pub var cuDeviceComputeCapability: ?*const fn (major: *c_int, minor: *c_int, device: CUdevice) callconv(.c) CUresult = null;
@@ -142,19 +173,19 @@ pub var cuDeviceGetAttribute: ?*const fn (pi: *c_int, attrib: c_int, dev: CUdevi
 pub var cuGetErrorName: ?*const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = null;
 pub var cuGetErrorString: ?*const fn (result: CUresult, pstr: *[*:0]const c_char) callconv(.c) CUresult = null;
 
-// Memory
+// Memory - Note: CUdeviceptr is passed by value (it's a c_ulonglong)
 pub var cuMemAllocHost: ?*const fn (pHost: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = null;
 pub var cuMemFreeHost: ?*const fn (pHost: *anyopaque) callconv(.c) CUresult = null;
-pub var cuMemAlloc: ?*const fn (pdDev: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = null;
-pub var cuMemFree: ?*const fn (pdDev: *anyopaque) callconv(.c) CUresult = null;
-pub var cuMemcpyHtoD: ?*const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
-pub var cuMemcpyDtoH: ?*const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
-pub var cuMemcpyDtoD: ?*const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemAlloc: ?*const fn (pdDev: *CUdeviceptr, bytesize: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemFree: ?*const fn (dptr: CUdeviceptr) callconv(.c) CUresult = null;
+pub var cuMemcpyHtoD: ?*const fn (dstDevice: CUdeviceptr, srcHost: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoH: ?*const fn (dstHost: *anyopaque, srcDevice: CUdeviceptr, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoD: ?*const fn (dstDevice: CUdeviceptr, srcDevice: CUdeviceptr, ByteCount: c_size_t) callconv(.c) CUresult = null;
 
 // Async memory operations
-pub var cuMemcpyHtoDAsync: ?*const fn (dst: *anyopaque, hostSrc: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
-pub var cuMemcpyDtoHAsync: ?*const fn (hostDst: *anyopaque, srcDev: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
-pub var cuMemcpyDtoDAsync: ?*const fn (dst: *anyopaque, src: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
+pub var cuMemcpyHtoDAsync: ?*const fn (dstDevice: CUdeviceptr, srcHost: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoHAsync: ?*const fn (dstHost: *anyopaque, srcDevice: CUdeviceptr, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoDAsync: ?*const fn (dstDevice: CUdeviceptr, srcDevice: CUdeviceptr, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
 
 // Memory information and handle operations
 pub var cuMemGetInfo: ?*const fn (free_bytes: *c_ulonglong, total_bytes: *c_ulonglong) callconv(.c) CUresult = null;
@@ -169,7 +200,7 @@ pub var cuCtxDestroy: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxSetCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxGetCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxPushCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
-pub var cuCtxPopCurrent: ?*const fn (pctx: *?*CUcontext, flags: c_uint) callconv(.c) CUresult = null;
+pub var cuCtxPopCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
 pub var cuModuleGetFunction: ?*const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 
 // Additional Module & Kernel Management Functions
@@ -177,8 +208,12 @@ pub var cuModuleGetGlobal: ?*const fn (pglobal: *?*anyopaque, pbytesize: *c_size
 pub var cuModuleGetTexRef: ?*const fn (ptref: *?*anyopaque, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 pub var cuModuleLaunch: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = null;
 pub var cuModuleLaunchCooperative: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = null;
-pub var cuFuncSetCache: ?*const fn (function: *CUfunction, cache_config: c_int) callconv(.c) CUresult = null;
-pub var cuFuncSetSharedMem: ?*const fn (function: *CUfunction, bytes: c_uint) callconv(.c) CUresult = null;
+
+// Function/Kernel Configuration
+pub var cuFuncGetAttribute: ?*const fn (pi: *c_int, attrib: c_int, func: *CUfunction) callconv(.c) CUresult = null;
+pub var cuFuncSetAttribute: ?*const fn (func: *CUfunction, attrib: c_int, value: c_int) callconv(.c) CUresult = null;
+pub var cuFuncSetCacheConfig: ?*const fn (func: *CUfunction, config: c_int) callconv(.c) CUresult = null;
+pub var cuFuncSetSharedMemConfig: ?*const fn (func: *CUfunction, config: c_int) callconv(.c) CUresult = null;
 
 // Stream Management Functions
 pub var cuStreamCreate: ?*const fn (pstream: *?*CUstream, flags: c_uint) callconv(.c) CUresult = null;
@@ -187,7 +222,7 @@ pub var cuStreamQuery: ?*const fn (stream: *CUstream) callconv(.c) CUresult = nu
 pub var cuStreamSynchronize: ?*const fn (stream: *CUstream) callconv(.c) CUresult = null;
 pub var cuStreamAddCallback: ?*const fn (stream: *CUstream, callback: *anyopaque, userdata: ?*anyopaque, flags: c_uint) callconv(.c) CUresult = null;
 pub var cuStreamBeginCapture: ?*const fn (stream: *CUstream, mode: c_int) callconv(.c) CUresult = null;
-pub var cuStreamEndCapture: ?*const fn (pstream_count: *?*[]*CUstream, stream: *CUstream) callconv(.c) CUresult = null;
+pub var cuStreamEndCapture: ?*const fn (stream: *CUstream, pgraph: *?*CUgraph) callconv(.c) CUresult = null;
 pub var cuStreamGetCaptureState: ?*const fn (state: *c_int, stream: *CUstream) callconv(.c) CUresult = null;
 
 // Event Management Functions
@@ -196,171 +231,241 @@ pub var cuEventDestroy: ?*const fn (event: *CUevent) callconv(.c) CUresult = nul
 pub var cuEventRecord: ?*const fn (event: *CUevent, stream: ?*CUstream) callconv(.c) CUresult = null;
 pub var cuEventSynchronize: ?*const fn (event: *CUevent) callconv(.c) CUresult = null;
 
-pub fn load() !void {
-    if (lib != null) return;
+// Event timing function
+pub var cuEventElapsedTime: ?*const fn (ms: *f32, start: *CUevent, end: *CUevent) callconv(.c) CUresult = null;
 
-    // Try standard names
-    const lib_names = [_][]const u8{ "libcuda.so.1", "libcuda.so" };
-    for (lib_names) |name| {
-        lib = std.DynLib.open(name) catch continue;
-        break;
+/// Helper to lookup a symbol using C's dlsym
+fn dlsym_lookup(comptime T: type, name: [*:0]const u8) ?T {
+    if (lib_handle) |handle| {
+        const sym = c.dlsym(handle, name);
+        if (sym != null) {
+            return @ptrCast(sym);
+        }
     }
-    if (lib == null) {
-        // Fallback for WSL specifically if not in path (though usually it is)
-        const wsl_path = "/usr/lib/wsl/lib/libcuda.so.1";
-        lib = std.DynLib.open(wsl_path) catch null;
-    }
-
-    if (lib == null) return error.CudaLibraryNotFound;
-    const l = &lib.?;
-
-    // Helper to lookup
-    cuInit = l.lookup(@TypeOf(cuInit.?), "cuInit") orelse return error.SymbolNotFound;
-    cuDriverGetVersion = l.lookup(@TypeOf(cuDriverGetVersion.?), "cuDriverGetVersion") orelse return error.SymbolNotFound;
-    cuDeviceGetCount = l.lookup(@TypeOf(cuDeviceGetCount.?), "cuDeviceGetCount") orelse return error.SymbolNotFound;
-    cuDeviceGetProperties = l.lookup(@TypeOf(cuDeviceGetProperties.?), "cuDeviceGetProperties") orelse return error.SymbolNotFound;
-    cuDeviceGetName = l.lookup(@TypeOf(cuDeviceGetName.?), "cuDeviceGetName") orelse return error.SymbolNotFound;
-
-    cuGetErrorName = l.lookup(@TypeOf(cuGetErrorName.?), "cuGetErrorName") orelse return error.SymbolNotFound;
-    cuGetErrorString = l.lookup(@TypeOf(cuGetErrorString.?), "cuGetErrorString") orelse return error.SymbolNotFound;
-
-    cuMemAllocHost = l.lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost") orelse
-        l.lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
-    cuMemFreeHost = l.lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost") orelse return error.SymbolNotFound;
-
-    cuMemAlloc = l.lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc") orelse
-        l.lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc_v2") orelse return error.SymbolNotFound;
-
-    cuMemFree = l.lookup(@TypeOf(cuMemFree.?), "cuMemFree") orelse
-        l.lookup(@TypeOf(cuMemFree.?), "cuMemFree_v2") orelse return error.SymbolNotFound;
-
-    cuMemcpyHtoD = l.lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse
-        l.lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
-
-    cuMemcpyDtoH = l.lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse
-        l.lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
-
-    cuMemcpyDtoD = l.lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse
-        l.lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
-
-    // Helper lookups
-    cuDeviceComputeCapability = l.lookup(@TypeOf(cuDeviceComputeCapability.?), "cuDeviceComputeCapability");
-    cuDeviceGetAttribute = l.lookup(@TypeOf(cuDeviceGetAttribute.?), "cuDeviceGetAttribute");
-
-    cuDeviceTotalMem = l.lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem") orelse
-        l.lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem_v2");
-
-    // Async memory operations (optional - may not exist on older CUDA versions)
-    cuMemcpyHtoDAsync = l.lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync");
-    cuMemcpyDtoHAsync = l.lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync");
-    cuMemcpyDtoDAsync = l.lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync");
-
-    // Memory information and handle operations
-    cuMemGetInfo = l.lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
-    cuMemGetHandle = l.lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v1") orelse
-        l.lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v2");
-
-    // Context management
-    cuCtxCreate = l.lookup(@TypeOf(cuCtxCreate.?), "cuCtxCreate") orelse return error.SymbolNotFound;
-    cuCtxDestroy = l.lookup(@TypeOf(cuCtxDestroy.?), "cuCtxDestroy") orelse return error.SymbolNotFound;
-    cuCtxSetCurrent = l.lookup(@TypeOf(cuCtxSetCurrent.?), "cuCtxSetCurrent") orelse return error.SymbolNotFound;
-    cuCtxGetCurrent = l.lookup(@TypeOf(cuCtxGetCurrent.?), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
-    cuCtxPushCurrent = l.lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
-    cuCtxPopCurrent = l.lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
-
-    // Modules
-    cuModuleLoad = l.lookup(@TypeOf(cuModuleLoad.?), "cuModuleLoad") orelse return error.SymbolNotFound;
-    cuModuleLoadData = l.lookup(@TypeOf(cuModuleLoadData.?), "cuModuleLoadData") orelse return error.SymbolNotFound;
-    cuModuleUnload = l.lookup(@TypeOf(cuModuleUnload.?), "cuModuleUnload") orelse return error.SymbolNotFound;
-    cuModuleGetFunction = l.lookup(@TypeOf(cuModuleGetFunction.?), "cuModuleGetFunction") orelse return error.SymbolNotFound;
-
-    // Additional Module & Kernel Management Functions
-    cuModuleGetGlobal = l.lookup(@TypeOf(cuModuleGetGlobal.?), "cuModuleGetGlobal");
-    cuModuleGetTexRef = l.lookup(@TypeOf(cuModuleGetTexRef.?), "cuModuleGetTexRef");
-    cuModuleLaunch = l.lookup(@TypeOf(cuModuleLaunch.?), "cuModuleLaunch");
-    cuModuleLaunchCooperative = l.lookup(@TypeOf(cuModuleLaunchCooperative.?), "cuModuleLaunchCooperative");
-    cuFuncSetCache = l.lookup(@TypeOf(cuFuncSetCache.?), "cuFuncSetCache");
-    cuFuncSetSharedMem = l.lookup(@TypeOf(cuFuncSetSharedMem.?), "cuFuncSetSharedMem");
-
-    // Stream Management Functions
-    cuStreamCreate = l.lookup(@TypeOf(cuStreamCreate.?), "cuStreamCreate") orelse
-        l.lookup(@TypeOf(cuStreamCreate.?), "cuStreamCreate_v2");
-    cuStreamDestroy = l.lookup(@TypeOf(cuStreamDestroy.?), "cuStreamDestroy");
-    cuStreamQuery = l.lookup(@TypeOf(cuStreamQuery.?), "cuStreamQuery");
-    cuStreamSynchronize = l.lookup(@TypeOf(cuStreamSynchronize.?), "cuStreamSynchronize") orelse
-        l.lookup(@TypeOf(cuStreamSynchronize.?), "cuStreamSynchronize_v2");
-    cuStreamAddCallback = l.lookup(@TypeOf(cuStreamAddCallback.?), "cuStreamAddCallback");
-    cuStreamBeginCapture = l.lookup(@TypeOf(cuStreamBeginCapture.?), "cuStreamBeginCapture_v2") orelse
-        l.lookup(@TypeOf(cuStreamBeginCapture.?), "cuStreamBeginCapture");
-    cuStreamEndCapture = l.lookup(@TypeOf(cuStreamEndCapture.?), "cuStreamEndCapture_v2") orelse
-        l.lookup(@TypeOf(cuStreamEndCapture.?), "cuStreamEndCapture");
-    cuStreamGetCaptureState = l.lookup(@TypeOf(cuStreamGetCaptureState.?), "cuStreamGetCaptureState");
-
-    // Event Management Functions
-    cuEventCreate = l.lookup(@TypeOf(cuEventCreate.?), "cuEventCreate");
-    cuEventDestroy = l.lookup(@TypeOf(cuEventDestroy.?), "cuEventDestroy");
-    cuEventRecord = l.lookup(@TypeOf(cuEventRecord.?), "cuEventRecord");
-    cuEventSynchronize = l.lookup(@TypeOf(cuEventSynchronize.?), "cuEventSynchronize") orelse
-        l.lookup(@TypeOf(cuEventSynchronize.?), "cuEventSynchronize_v2");
+    return null;
 }
 
-pub fn init(flags: c_uint) errors.CUDAError!void {
+pub fn load() !void {
+    if (lib_handle != null) return;
+
+    // Try standard paths using C's dlopen for WSL compatibility
+    const lib_paths = [_][*:0]const u8{
+        "libcuda.so.1",
+        "libcuda.so",
+        "/usr/lib/wsl/lib/libcuda.so.1",
+    };
+
+    for (lib_paths) |path| {
+        lib_handle = c.dlopen(path, c.RTLD_NOW);
+        if (lib_handle != null) {
+            std.debug.print("DEBUG: Loaded CUDA library from {s}\n", .{path});
+            break;
+        }
+    }
+
+    if (lib_handle == null) {
+        const err = c.dlerror();
+        if (err != null) {
+            std.debug.print("ERROR: Failed to load CUDA library: {s}\n", .{err});
+        }
+        return error.CudaLibraryNotFound;
+    }
+
+    std.debug.print("DEBUG: Using library handle at address {*}\n", .{lib_handle});
+
+    // Core functions (required)
+    cuInit = dlsym_lookup(@TypeOf(cuInit.?), "cuInit") orelse return error.SymbolNotFound;
+    std.debug.print("DEBUG: cuInit loaded at address {x}\n", .{@intFromPtr(cuInit.?)});
+
+    cuDriverGetVersion = dlsym_lookup(@TypeOf(cuDriverGetVersion.?), "cuDriverGetVersion") orelse return error.SymbolNotFound;
+    cuDeviceGetCount = dlsym_lookup(@TypeOf(cuDeviceGetCount.?), "cuDeviceGetCount") orelse return error.SymbolNotFound;
+    cuDeviceGet = dlsym_lookup(@TypeOf(cuDeviceGet.?), "cuDeviceGet") orelse return error.SymbolNotFound;
+    cuDeviceGetProperties = dlsym_lookup(@TypeOf(cuDeviceGetProperties.?), "cuDeviceGetProperties") orelse return error.SymbolNotFound;
+    cuDeviceGetName = dlsym_lookup(@TypeOf(cuDeviceGetName.?), "cuDeviceGetName") orelse return error.SymbolNotFound;
+
+    cuGetErrorName = dlsym_lookup(@TypeOf(cuGetErrorName.?), "cuGetErrorName") orelse return error.SymbolNotFound;
+    cuGetErrorString = dlsym_lookup(@TypeOf(cuGetErrorString.?), "cuGetErrorString") orelse return error.SymbolNotFound;
+
+    // Memory functions - try versioned names
+    cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost") orelse
+        dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
+    cuMemFreeHost = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost") orelse return error.SymbolNotFound;
+
+    cuMemAlloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc") orelse
+        dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc_v2");
+    if (cuMemAlloc == null) {
+        std.debug.print("ERROR: cuMemAlloc not found\n", .{});
+        return error.SymbolNotFound;
+    }
+    std.debug.print("DEBUG: Found cuMemAlloc symbol at {x}\n", .{@intFromPtr(cuMemAlloc.?)});
+
+    cuMemFree = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree") orelse
+        dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree_v2");
+    if (cuMemFree == null) {
+        std.debug.print("ERROR: cuMemFree not found\n", .{});
+        return error.SymbolNotFound;
+    }
+    std.debug.print("DEBUG: Found cuMemFree symbol at {x}\n", .{@intFromPtr(cuMemFree.?)});
+
+    cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse
+        dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
+    cuMemcpyDtoH = dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse
+        dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
+    cuMemcpyDtoD = dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse
+        dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
+
+    // Optional helper lookups
+    cuDeviceComputeCapability = dlsym_lookup(@TypeOf(cuDeviceComputeCapability.?), "cuDeviceComputeCapability");
+    cuDeviceGetAttribute = dlsym_lookup(@TypeOf(cuDeviceGetAttribute.?), "cuDeviceGetAttribute");
+    cuDeviceTotalMem = dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem") orelse
+        dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem_v2");
+
+    // Async memory operations (optional)
+    cuMemcpyHtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync");
+    cuMemcpyDtoHAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync");
+    cuMemcpyDtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync");
+
+    // Memory information and handle operations
+    cuMemGetInfo = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
+    cuMemGetHandle = dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v1") orelse
+        dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v2");
+
+    // Context management (required)
+    cuCtxCreate = dlsym_lookup(@TypeOf(cuCtxCreate.?), "cuCtxCreate") orelse return error.SymbolNotFound;
+    cuCtxDestroy = dlsym_lookup(@TypeOf(cuCtxDestroy.?), "cuCtxDestroy") orelse return error.SymbolNotFound;
+    cuCtxSetCurrent = dlsym_lookup(@TypeOf(cuCtxSetCurrent.?), "cuCtxSetCurrent") orelse return error.SymbolNotFound;
+    cuCtxGetCurrent = dlsym_lookup(@TypeOf(cuCtxGetCurrent.?), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
+    cuCtxPushCurrent = dlsym_lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
+    cuCtxPopCurrent = dlsym_lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
+
+    // Modules (required)
+    cuModuleLoad = dlsym_lookup(@TypeOf(cuModuleLoad.?), "cuModuleLoad") orelse return error.SymbolNotFound;
+    cuModuleLoadData = dlsym_lookup(@TypeOf(cuModuleLoadData.?), "cuModuleLoadData") orelse return error.SymbolNotFound;
+    cuModuleUnload = dlsym_lookup(@TypeOf(cuModuleUnload.?), "cuModuleUnload") orelse return error.SymbolNotFound;
+    cuModuleGetFunction = dlsym_lookup(@TypeOf(cuModuleGetFunction.?), "cuModuleGetFunction") orelse return error.SymbolNotFound;
+
+    // Additional Module & Kernel Management Functions (optional)
+    cuModuleGetGlobal = dlsym_lookup(@TypeOf(cuModuleGetGlobal.?), "cuModuleGetGlobal");
+    cuModuleGetTexRef = dlsym_lookup(@TypeOf(cuModuleGetTexRef.?), "cuModuleGetTexRef");
+    cuModuleLaunch = dlsym_lookup(@TypeOf(cuModuleLaunch.?), "cuModuleLaunch");
+    cuModuleLaunchCooperative = dlsym_lookup(@TypeOf(cuModuleLaunchCooperative.?), "cuModuleLaunchCooperative");
+
+    // Function/Kernel Configuration Functions (optional)
+    cuFuncGetAttribute = dlsym_lookup(@TypeOf(cuFuncGetAttribute.?), "cuFuncGetAttribute");
+    cuFuncSetAttribute = dlsym_lookup(@TypeOf(cuFuncSetAttribute.?), "cuFuncSetAttribute");
+    cuFuncSetCacheConfig = dlsym_lookup(@TypeOf(cuFuncSetCacheConfig.?), "cuFuncSetCacheConfig");
+    cuFuncSetSharedMemConfig = dlsym_lookup(@TypeOf(cuFuncSetSharedMemConfig.?), "cuFuncSetSharedMemConfig");
+
+    // Stream Management Functions (optional)
+    cuStreamCreate = dlsym_lookup(@TypeOf(cuStreamCreate.?), "cuStreamCreate") orelse
+        dlsym_lookup(@TypeOf(cuStreamCreate.?), "cuStreamCreate_v2");
+    cuStreamDestroy = dlsym_lookup(@TypeOf(cuStreamDestroy.?), "cuStreamDestroy");
+    cuStreamQuery = dlsym_lookup(@TypeOf(cuStreamQuery.?), "cuStreamQuery");
+    cuStreamSynchronize = dlsym_lookup(@TypeOf(cuStreamSynchronize.?), "cuStreamSynchronize") orelse
+        dlsym_lookup(@TypeOf(cuStreamSynchronize.?), "cuStreamSynchronize_v2");
+    cuStreamAddCallback = dlsym_lookup(@TypeOf(cuStreamAddCallback.?), "cuStreamAddCallback");
+    cuStreamBeginCapture = dlsym_lookup(@TypeOf(cuStreamBeginCapture.?), "cuStreamBeginCapture_v2") orelse
+        dlsym_lookup(@TypeOf(cuStreamBeginCapture.?), "cuStreamBeginCapture");
+    cuStreamEndCapture = dlsym_lookup(@TypeOf(cuStreamEndCapture.?), "cuStreamEndCapture_v2") orelse
+        dlsym_lookup(@TypeOf(cuStreamEndCapture.?), "cuStreamEndCapture");
+    cuStreamGetCaptureState = dlsym_lookup(@TypeOf(cuStreamGetCaptureState.?), "cuStreamGetCaptureState");
+
+    // Event Management Functions (optional)
+    cuEventCreate = dlsym_lookup(@TypeOf(cuEventCreate.?), "cuEventCreate");
+    cuEventDestroy = dlsym_lookup(@TypeOf(cuEventDestroy.?), "cuEventDestroy");
+    cuEventRecord = dlsym_lookup(@TypeOf(cuEventRecord.?), "cuEventRecord");
+    cuEventSynchronize = dlsym_lookup(@TypeOf(cuEventSynchronize.?), "cuEventSynchronize") orelse
+        dlsym_lookup(@TypeOf(cuEventSynchronize.?), "cuEventSynchronize_v2");
+    cuEventElapsedTime = dlsym_lookup(@TypeOf(cuEventElapsedTime.?), "cuEventElapsedTime");
+}
+
+
+pub fn init(flags: c_int) errors.CUDAError!void {
     try load();
 
     if (cuInit) |f| {
+        std.debug.print("DEBUG: Calling cuInit with flags {d}...\n", .{flags});
         const result = f(flags);
-        if (result == CUDA_SUCCESS) return;
-        if (result != 0) std.log.err("cuInit failed with code: {d}", .{result});
-        return errors.cudaError(result);
+        if (result != CUDA_SUCCESS) {
+            std.debug.print("ERROR: cuInit failed with code {d}\n", .{result});
+            return errors.cudaError(result);
+        }
+        std.debug.print("INFO: cuInit succeeded\n", .{});
+    } else {
+        std.debug.print("ERROR: cuInit not loaded\n", .{});
+        return error.Uninitialized;
     }
-    return errors.CUDAError.Unknown;
 }
 
 /// Get CUDA driver version
 pub fn getVersion() errors.CUDAError![2]c_int {
-    var driver_version: c_int = undefined;
-    const result = cuDriverGetVersion.?(&driver_version);
-    if (result != CUDA_SUCCESS) {
-        return errors.cudaError(result);
+    if (cuDriverGetVersion) |f| {
+        var driver_version: c_int = undefined;
+        const result = f(&driver_version);
+        if (result != CUDA_SUCCESS) {
+            return errors.cudaError(result);
+        }
+
+        // Convert driver version to major.minor format
+        const major = @divTrunc(driver_version, 1000);
+        const minor = @mod(driver_version, 1000);
+
+        return [2]c_int{ major, minor };
+    } else {
+        std.debug.print("ERROR: cuDriverGetVersion not loaded\n", .{});
+        return error.Uninitialized;
     }
-
-    // Convert driver version to major.minor format
-    const major = @divTrunc(driver_version, 1000);
-    const minor = @mod(driver_version, 1000);
-
-    return [2]c_int{ major, minor };
 }
 
 /// Get number of CUDA devices
 pub fn getDeviceCount() errors.CUDAError!c_int {
-    var count: c_int = undefined;
     if (cuDeviceGetCount) |f| {
+        var count: c_int = undefined;
         const result = f(&count);
         if (result == CUDA_SUCCESS) {
             return count;
         }
         return errors.cudaError(result);
     }
-    return errors.CUDAError.Unknown;
+    return error.Uninitialized;
+}
+
+/// Get device handle by index
+pub fn getDevice(device_index: c_int) errors.CUDAError!CUdevice {
+    if (cuDeviceGet) |f| {
+        var device: CUdevice = undefined;
+        const result = f(&device, device_index);
+        if (result == CUDA_SUCCESS) {
+            return device;
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
 }
 
 /// Allocate device memory
-pub fn allocDeviceMemory(size: c_size_t) errors.CUDAError!*anyopaque {
-    var ptr: ?*anyopaque = null;
-    const result = cuMemAlloc.?(&ptr, size);
-    if (result == CUDA_SUCCESS) {
-        return ptr.?;
+pub fn allocDeviceMemory(size: c_size_t) errors.CUDAError!CUdeviceptr {
+    if (cuMemAlloc) |f| {
+        var dev_ptr: CUdeviceptr = 0;
+        const result = f(&dev_ptr, size);
+        if (result == CUDA_SUCCESS) {
+            return dev_ptr;
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return error.Uninitialized;
 }
 
 /// Free device memory
-pub fn freeDeviceMemory(ptr: *anyopaque) errors.CUDAError!void {
-    const result = cuMemFree.?(ptr);
-    if (result == CUDA_SUCCESS) {
-        return;
+pub fn freeDeviceMemory(dev_ptr: CUdeviceptr) errors.CUDAError!void {
+    if (cuMemFree) |f| {
+        const result = f(dev_ptr);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return error.Uninitialized;
 }
 
 /// Allocate pinned host memory
@@ -383,36 +488,45 @@ pub fn freeHost(ptr: *anyopaque) errors.CUDAError!void {
 }
 
 /// Copy memory from host to device
-pub fn copyHostToDevice(dst: *anyopaque, host_src: []const u8) errors.CUDAError!void {
-    const result = cuMemcpyHtoD.?(dst, host_src.ptr, host_src.len);
-    if (result == CUDA_SUCCESS) {
-        return;
+pub fn copyHostToDevice(dst: CUdeviceptr, host_src: []const u8) errors.CUDAError!void {
+    if (cuMemcpyHtoD) |f| {
+        const result = f(dst, host_src.ptr, host_src.len);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return error.Uninitialized;
 }
 
 /// Copy memory from device to host
-pub fn copyDeviceToHost(host_dst: []u8, device_src: *const anyopaque) errors.CUDAError!void {
-    const result = cuMemcpyDtoH.?(host_dst.ptr, device_src, host_dst.len);
-    if (result == CUDA_SUCCESS) {
-        return;
+pub fn copyDeviceToHost(host_dst: []u8, device_src: CUdeviceptr) errors.CUDAError!void {
+    if (cuMemcpyDtoH) |f| {
+        const result = f(host_dst.ptr, device_src, host_dst.len);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return error.Uninitialized;
 }
 
 /// Copy memory from device to device
-pub fn copyDeviceToDevice(dst: *anyopaque, src: *const anyopaque, size: c_size_t) errors.CUDAError!void {
-    const result = cuMemcpyDtoD.?(dst, src, size);
-    if (result == CUDA_SUCCESS) {
-        return;
+pub fn copyDeviceToDevice(dst: CUdeviceptr, src: CUdeviceptr, size: c_size_t) errors.CUDAError!void {
+    if (cuMemcpyDtoD) |f| {
+        const result = f(dst, src, size);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
     }
-    return errors.cudaError(result);
+    return error.Uninitialized;
 }
 
 /// Copy memory from host to device asynchronously
-pub fn copyHostToDeviceAsync(dst: *anyopaque, host_src: []const u8, stream: ?*CUstream) errors.CUDAError!void {
-    if (cuMemcpyHtoDAsync != undefined and cuMemcpyHtoDAsync != null) {
-        const result = @as(*const fn (*anyopaque, *const anyopaque, usize, ?*CUstream) callconv(.c) CUresult, @ptrCast(cuMemcpyHtoDAsync))(dst, host_src.ptr, host_src.len, stream);
+pub fn copyHostToDeviceAsync(dst: CUdeviceptr, host_src: []const u8, stream: ?*CUstream) errors.CUDAError!void {
+    if (cuMemcpyHtoDAsync) |f| {
+        const result = f(dst, host_src.ptr, host_src.len, stream);
         if (result == CUDA_SUCCESS) {
             return;
         }
@@ -420,16 +534,12 @@ pub fn copyHostToDeviceAsync(dst: *anyopaque, host_src: []const u8, stream: ?*CU
     } else {
         // Fallback to synchronous copy
         std.log.warn("Async memory operations not available, falling back to synchronous", .{});
-        const result = cuMemcpyHtoD.?(dst, host_src.ptr, host_src.len);
-        if (result == CUDA_SUCCESS) {
-            return;
-        }
-        return errors.cudaError(result);
+        return copyHostToDevice(dst, host_src);
     }
 }
 
 /// Copy memory from device to host asynchronously
-pub fn copyDeviceToHostAsync(host_dst: []u8, device_src: *const anyopaque, stream: ?*CUstream) errors.CUDAError!void {
+pub fn copyDeviceToHostAsync(host_dst: []u8, device_src: CUdeviceptr, stream: ?*CUstream) errors.CUDAError!void {
     if (cuMemcpyDtoHAsync) |f| {
         const result = f(host_dst.ptr, device_src, host_dst.len, stream);
         if (result == CUDA_SUCCESS) {
@@ -439,16 +549,12 @@ pub fn copyDeviceToHostAsync(host_dst: []u8, device_src: *const anyopaque, strea
     } else {
         // Fallback to synchronous copy
         std.log.warn("Async memory operations not available, falling back to synchronous", .{});
-        const result = cuMemcpyDtoH.?(host_dst.ptr, device_src, host_dst.len);
-        if (result == CUDA_SUCCESS) {
-            return;
-        }
-        return errors.cudaError(result);
+        return copyDeviceToHost(host_dst, device_src);
     }
 }
 
 /// Copy memory from device to device asynchronously
-pub fn copyDeviceToDeviceAsync(dst: *anyopaque, src: *const anyopaque, size: c_size_t, stream: ?*CUstream) errors.CUDAError!void {
+pub fn copyDeviceToDeviceAsync(dst: CUdeviceptr, src: CUdeviceptr, size: c_size_t, stream: ?*CUstream) errors.CUDAError!void {
     if (cuMemcpyDtoDAsync) |f| {
         const result = f(dst, src, size, stream);
         if (result == CUDA_SUCCESS) {
@@ -458,11 +564,7 @@ pub fn copyDeviceToDeviceAsync(dst: *anyopaque, src: *const anyopaque, size: c_s
     } else {
         // Fallback to synchronous copy
         std.log.warn("Async memory operations not available, falling back to synchronous", .{});
-        const result = cuMemcpyDtoD.?(dst, src, size);
-        if (result == CUDA_SUCCESS) {
-            return;
-        }
-        return errors.cudaError(result);
+        return copyDeviceToDevice(dst, src, size);
     }
 }
 
@@ -605,7 +707,7 @@ pub fn getErrorString(error_code: CUresult) ![]const u8 {
 /// Create a new CUDA context
 pub fn createContext(flags: c_uint, device: CUdevice) errors.CUDAError!*CUcontext {
     var ctx_handle: ?*CUcontext = null;
-    
+
     if (cuCtxCreate != null) {
         const result = @as(*const fn (*?*CUcontext, c_uint, c_int) callconv(.c) CUresult, @ptrCast(cuCtxCreate))(&ctx_handle, flags, device);
         if (result == CUDA_SUCCESS) {
@@ -652,7 +754,7 @@ pub fn setCurrentContext(ctx: *CUcontext) errors.CUDAError!void {
 /// Get the current CUDA context
 pub fn getCurrentContext() errors.CUDAError!*CUcontext {
     var ctx_handle: ?*CUcontext = null;
-    
+
     if (cuCtxGetCurrent != null) {
         const result = @as(*const fn (*?*CUcontext) callconv(.c) CUresult, @ptrCast(cuCtxGetCurrent))(&ctx_handle);
         if (result == CUDA_SUCCESS) {
@@ -684,10 +786,9 @@ pub fn pushContext(ctx: *CUcontext) errors.CUDAError!void {
 /// Pop context from the stack
 pub fn popContext() errors.CUDAError!*CUcontext {
     var ctx_handle: ?*CUcontext = null;
-    const flags: c_uint = 0;
-    
+
     if (cuCtxPopCurrent != null) {
-        const result = @as(*const fn (*?*CUcontext, c_uint) callconv(.c) CUresult, @ptrCast(cuCtxPopCurrent))(&ctx_handle, flags);
+        const result = @as(*const fn (*?*CUcontext) callconv(.c) CUresult, @ptrCast(cuCtxPopCurrent))(&ctx_handle);
         if (result == CUDA_SUCCESS) {
             return ctx_handle.?;
         }
@@ -828,35 +929,6 @@ pub fn launchCooperativeKernel(function: *CUfunction, grid_dim_x: c_uint, grid_d
     }
 }
 
-/// Set kernel cache configuration
-pub fn setFunctionCache(function: *CUfunction, cache_config: c_int) errors.CUDAError!void {
-    if (cuFuncSetCache != undefined and cuFuncSetCache != null) {
-        const result = @as(*const fn (*CUfunction, c_int) callconv(.c) CUresult, @ptrCast(cuFuncSetCache))(function, cache_config);
-        if (result == CUDA_SUCCESS) {
-            return;
-        }
-        return errors.cudaError(result);
-    } else {
-        // Fallback - function cache configuration not available
-        std.log.warn("cuFuncSetCache not available on this system", .{});
-        return error.SymbolNotFound;
-    }
-}
-
-/// Set shared memory configuration for kernel
-pub fn setFunctionSharedMem(function: *CUfunction, bytes: c_uint) errors.CUDAError!void {
-    if (cuFuncSetSharedMem != undefined and cuFuncSetSharedMem != null) {
-        const result = @as(*const fn (*CUfunction, c_uint) callconv(.c) CUresult, @ptrCast(cuFuncSetSharedMem))(function, bytes);
-        if (result == CUDA_SUCCESS) {
-            return;
-        }
-        return errors.cudaError(result);
-    } else {
-        // Fallback - shared memory configuration not available
-        std.log.warn("cuFuncSetSharedMem not available on this system", .{});
-        return error.SymbolNotFound;
-    }
-}
 
 // ============================================================================
 // STREAM MANAGEMENT WRAPPERS (8 functions)
@@ -931,30 +1003,16 @@ pub fn beginCapture(stream: *CUstream, mode: c_int) errors.CUDAError!void {
     }
 }
 
-/// End capturing and get the captured streams
-pub fn endCapture(stream: *CUstream) errors.CUDAError!*[]*CUstream {
+/// End capturing and get the captured graph
+pub fn endCapture(stream: *CUstream) errors.CUDAError!*CUgraph {
     if (cuStreamEndCapture != undefined and cuStreamEndCapture != null) {
-        var stream_count: ?*c_int = null;
+        var graph: ?*CUgraph = null;
 
-        // First call to get number of streams
-        const result1 = @as(*const fn (*?*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(&stream_count, stream);
-        if (result1 == CUDA_SUCCESS and stream_count != null) {
-            // Mark as used to avoid unused variable warning
-            const count = stream_count.?;
-            _ = count;
-
-            var streams: ?*[]*CUstream = undefined;
-            // Second call to get the actual streams
-            const result2 = @as(*const fn (*?*c_int, *CUstream) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(@ptrCast(&streams), stream);
-
-            if (result2 == CUDA_SUCCESS and streams != null) {
-                return &streams.?;
-            }
+        const result = @as(*const fn (*CUstream, *?*CUgraph) callconv(.c) CUresult, @ptrCast(cuStreamEndCapture))(stream, &graph);
+        if (result == CUDA_SUCCESS and graph != null) {
+            return graph.?;
         }
-
-        // If we get here, there was an issue with the capture
-        const final_result = cuStreamQuery(stream);
-        return errors.cudaError(final_result);
+        return errors.cudaError(result);
     } else {
         // Fallback - stream capture not available
         std.log.warn("cuStreamEndCapture not available on this system", .{});
@@ -1078,4 +1136,93 @@ pub fn createBlockingEvent() errors.CUDAError!*CUevent {
 /// Record an event in the default stream
 pub fn recordInDefaultStream(event: *CUevent) errors.CUDAError!void {
     return recordEvent(event, null);
+}
+
+// ============================================================================
+// KERNEL CONFIGURATION FUNCTIONS
+// ============================================================================
+
+/// Get a function attribute
+pub fn getFunctionAttribute(func: *CUfunction, attrib: c_int) errors.CUDAError!c_int {
+    if (cuFuncGetAttribute) |f| {
+        var value: c_int = undefined;
+        const result = f(&value, attrib, func);
+        if (result == CUDA_SUCCESS) {
+            return value;
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
+}
+
+/// Set a function attribute
+pub fn setFunctionAttribute(func: *CUfunction, attrib: c_int, value: c_int) errors.CUDAError!void {
+    if (cuFuncSetAttribute) |f| {
+        const result = f(func, attrib, value);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
+}
+
+/// Set cache configuration for a function
+pub fn setFunctionCacheConfig(func: *CUfunction, config: c_int) errors.CUDAError!void {
+    if (cuFuncSetCacheConfig) |f| {
+        const result = f(func, config);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
+}
+
+/// Set shared memory configuration for a function
+pub fn setFunctionSharedMemConfig(func: *CUfunction, config: c_int) errors.CUDAError!void {
+    if (cuFuncSetSharedMemConfig) |f| {
+        const result = f(func, config);
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
+}
+
+// ============================================================================
+// MODULE RESOURCE ACCESS FUNCTIONS
+// ============================================================================
+
+/// Get pointer to global variable from module
+pub fn getModuleGlobal(module: *CUmodule, name: [*:0]const u8) errors.CUDAError!struct { ptr: CUdeviceptr, size: usize } {
+    if (cuModuleGetGlobal) |f| {
+        var global_ptr: ?*anyopaque = null;
+        var size: c_size_t = undefined;
+        const result = f(&global_ptr, &size, module, name);
+        if (result == CUDA_SUCCESS) {
+            // Cast pointer to device pointer
+            const dev_ptr = @intFromPtr(global_ptr);
+            return .{ .ptr = @as(CUdeviceptr, dev_ptr), .size = size };
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
+}
+
+/// Get texture reference from module
+pub fn getModuleTexRef(module: *CUmodule, name: [*:0]const u8) errors.CUDAError!*anyopaque {
+    if (cuModuleGetTexRef) |f| {
+        var texref: ?*anyopaque = null;
+        const result = f(&texref, module, name);
+        if (result == CUDA_SUCCESS) {
+            if (texref) |ref| {
+                return ref;
+            }
+            return error.InvalidValue;
+        }
+        return errors.cudaError(result);
+    }
+    return error.Uninitialized;
 }

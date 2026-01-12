@@ -1,218 +1,106 @@
-# ZigCUDA - Native CUDA API for Zig
-
 ## Overview
 
-ZigCUDA is a comprehensive native CUDA API binding for the Zig programming language, providing direct access to NVIDIA's CUDA runtime and libraries without the overhead of C FFI. This project aims to create a production-ready inference engine with competitive performance to existing solutions like vLLM and TensorRT-LLLM, but with significantly smaller binary sizes and faster startup times.
+zigCuda is a native CUDA API binding for Zig that provides type-safe interfaces to CUDA operations. The codebase is organized into four main layers: low-level bindings, core abstractions, high-level integrations, and tensor operations.
 
-## Key Features
+## Root Files
 
-- **Native Zig Integration**: Direct bindings to CUDA Driver API, cuBLAS, and cuRNN
-- **Type-Safe Kernel Launch**: Compile-time verification of kernel parameters
-- **Memory Pool Management**: Efficient GPU memory allocation and management
-- **Quantized Model Support**: Native support for INT4/INT8 quantized models (GPTQ, AWQ)
-- **Production-Ready**: HTTP server with OpenAI-compatible API
-- **Single Binary Deployment**: No external dependencies beyond NVIDIA driver
+- [main.zig](../src/main.zig) - Application entry point with clean startup message
 
-## Architecture
+## Directory Structure
 
-### Core Components
+### bindings/ - Low-Level CUDA API Bindings
 
-#### 1. CUDA Bindings (`src/bindings/`)
-- `cuda.zig`: CUDA Driver API declarations
-- `cublas.zig`: cuBLAS bindings
-- `types.zig`: CUDA type definitions (CUdevice, CUcontext, etc.)
-- `errors.zig`: CUresult → Zig error mapping
+Core CUDA library interfaces and type definitions:
 
-#### 2. Core Runtime (`src/core/`)
-- `device.zig`: GPU device enumeration and management
-- `context.zig`: CUDA context management
-- `stream.zig`: Asynchronous stream operations
-- `memory.zig`: Memory pool allocation and management
-- `module.zig`: PTX/CUBIN loading and compilation
-- `kernel.zig`: Type-safe kernel launch with compile-time parameter checking
+- [errors_stub.zig](bindings/errors_stub.zig) - Stub error types for development without CUDA
+- [cuda_stub.zig](bindings/cuda_stub.zig) - Development stub when CUDA is not available
+- [cublas.zig](bindings/cublas.zig) - cuBLAS API bindings with dynamic loading support
+- [curand.zig](bindings/curand.zig) - cuRAND API bindings for random number generation
+- [cuda.zig](bindings/cuda.zig) - Core CUDA Driver API declarations and essential bindings
+- [types.zig](bindings/types.zig) - CUDA type definitions and constants
+- [ffi.zig](bindings/ffi.zig) - Foreign function interface declarations
+- [errors.zig](bindings/errors.zig) - Error code mappings and Zig error types
 
-#### 3. Tensor Operations (`src/ops/`)
-- `tensor.zig`: GPU tensor type system
-- `gemm.zig`: Matrix multiplication operations
-- `attention.zig`: Attention mechanisms (Flash Attention, Multi-Head Attention)
-- `norm.zig`: Layer normalization, RMS normalization
-- `activations.zig`: Activation functions (SiLU, GELU, etc.)
+### core/ - Core CUDA Abstractions
 
-#### 4. Library Integrations (`src/integrations/`)
-- `cublas.zig`: cuBLAS wrapper for high-performance linear algebra
-- `marlin.zig`: Marlin INT4 kernels for quantized operations
-- `flash.zig`: Flash Attention implementation
+High-level CUDA resource management and operations:
 
-#### 5. Model Loading (`src/model/`)
-- `safetensors.zig`: Safetensors format parser
-- `gptq.zig`: GPTQ model loader with INT4 dequantization
-- `awq.zig`: AWQ model loader
-- `llama.zig`: L Llama architecture implementation
+- [kernel.zig](core/kernel.zig) - Type-safe kernel launch interface
+- [stream.zig](core/stream.zig) - Asynchronous stream operations management
+- [event.zig](core/event.zig) - Synchronization events for GPU operations
+- [memory.zig](core/memory.zig) - Memory pool allocation and management
+- [device.zig](core/device.zig) - GPU device enumeration and properties
+- [context.zig](core/context.zig) - CUDA context management and lifecycle
+- [module.zig](core/module.zig) - PTX/CUBIN compilation and loading
+- [config.zig](core/config.zig) - Runtime configuration management
 
-#### 6. Inference Engine (`src/inference/`)
-- `kv_cache.zig`: Key-value cache management for transformer models
-- `scheduler.zig`: Continuous batching for optimal throughput
-- `engine.zig`: End-to-end inference orchestration
+### integrations/ - High-Level Integrations
 
-#### 7. Production Server (`src/server/`)
-- `http.zig`: HTTP server implementation
-- `api.zig`: OpenAI-compatible API endpoints
-- `cli.zig`: Command-line interface for serving and benchmarking
+Optimized third-party library integrations:
 
-## Getting Started
+- [cublas.zig](integrations/cublas.zig) - cuBLAS integration for optimized BLAS operations
+- [cublaslt.zig](integrations/cublaslt.zig) - cuBLASLt integration for custom operations
+- [marlin.zig](integrations/marlin.zig) - Marlin INT4 kernels for quantized operations
 
-### Prerequisites
+### ops/ - Tensor Operations
 
-- Zig compiler (latest stable)
-- NVIDIA driver (CUDA toolkit not required for runtime)
-- NVIDIA GPU with compute capability 6.0+
+Core tensor types and neural network operations:
 
-### Building
+- [tensor.zig](ops/tensor.zig) - Core tensor type and fundamental tensor operations
+- [gemm.zig](ops/gemm.zig) - General matrix multiplication operations
+- [conv.zig](ops/conv.zig) - Convolution operations for neural networks
+- [attention.zig](ops/attention.zig) - Attention mechanisms (Flash, Multi-head)
+- [reduce.zig](ops/reduce.zig) - Reduction operations (sum, mean, max)
+- [norm.zig](ops/norm.zig) - Normalization layers (LayerNorm, RMSNorm)
+- [activations.zig](ops/activations.zig) - Activation functions for neural networks
+- [embedding.zig](ops/embedding.zig) - Embedding table operations
 
-```bash
-# Debug build
-zig build
+## Directory Tree View
 
-# Release build for production
-zig build -Doptimize=ReleaseFast
-
-# Cross-compile for different targets
-zig build -Dtarget=x86_64-linux-gnu
+```
+src/
+├── main.zig
+├── bindings/
+│   ├── errors_stub.zig
+│   ├── cuda_stub.zig
+│   ├── cublas.zig
+│   ├── curand.zig
+│   ├── cuda.zig
+│   ├── types.zig
+│   ├── ffi.zig
+│   └── errors.zig
+├── core/
+│   ├── kernel.zig
+│   ├── stream.zig
+│   ├── event.zig
+│   ├── memory.zig
+│   ├── device.zig
+│   ├── context.zig
+│   ├── module.zig
+│   └── config.zig
+├── integrations/
+│   ├── cublas.zig
+│   ├── cublaslt.zig
+│   └── marlin.zig
+└── ops/
+    ├── tensor.zig
+    ├── gemm.zig
+    ├── conv.zig
+    ├── attention.zig
+    ├── reduce.zig
+    ├── norm.zig
+    ├── activations.zig
+    └── embedding.zig
 ```
 
-### Basic Usage
+## Key Dependencies and Integration Flow
 
-```zig
-const cuda = @import("cuda");
-const tensor = @import("tensor");
+**Layer 1 - Bindings**: Low-level FFI to CUDA libraries (CUDA, cuBLAS, cuRAND) with error handling
 
-pub fn main() !void {
-    // Initialize CUDA
-    try cuda.init();
-    
-    // Get first GPU device
-    var device = try cuda.Device.init(0);
-    
-    // Create context
-    var ctx = try cuda.Context.init(&device);
-    
-    // Load and run inference
-    // ... see examples/ directory
-}
-```
+**Layer 2 - Core**: Type-safe abstractions managing GPU resources (devices, memory, streams, kernels)
 
-## Model Loading
+**Layer 3 - Integrations**: Optimized third-party library integrations building on core primitives
 
-ZigCUDA supports multiple model formats:
+**Layer 4 - Operations**: High-level tensor operations and neural network layers built on the foundation below
 
-### Safetensors
-```zig
-var model = try safetensors.Model.load("model.safetensors");
-```
-
-### GPTQ (Quantized)
-```zig
-var model = try gptq.Model.load("model-gptq.safetensors");
-```
-
-### AWQ (Quantized)
-```zig
-var model = try awq.Model.load("model-awq.safetensors");
-```
-
-## Running Inference
-
-### Command Line
-
-```bash
-# Start server
-./zigcuda serve --model ./llama-7b-gptq --port 8080
-
-# Benchmark performance
-./zigcuda bench --model ./llama-7b-gptq --batch-size 32
-
-# Model information
-./zigcuda info --model ./llama-7b-gptq
-```
-
-### HTTP API
-
-Once running, the server provides OpenAI-compatible endpoints:
-
-- `POST /v1/chat/completions` - Chat completions
-- `POST /v1/completions` - Text completions
-- `GET /v1/models` - List available models
-- `GET /health` - Health check
-
-## Performance Characteristics
-
-### Binary Size Comparison
-- **vLLM**: ~500MB+
-- **TRT-LLM**: ~1GB+
-- **ZigCUDA**: <5MB
-
-### Startup Time
-- **vLLM**: 10-30 seconds
-- **TRT-LLM**: 30-60 seconds  
-- **ZigCUDA**: <1 second
-
-### Memory Safety
-- **Traditional C++**: Manual memory management
-- **ZigCUDA**: Zig's compile-time memory safety
-
-## Development Status
-
-### Completed Phases
-- [ ] Phase 0: Driver Bindings
-- [ ] Phase 1: Core Runtime
-- [ ] Phase 2: Kernel Integration
-- [ ] Phase 3: Tensor Layer
-- [ ] Phase 4: Model Loading
-- [ ] Phase 5: Inference Engine
-- [ ] Phase 6: Production Serving
-
-### Current Milestone
-Currently working on Phase 5: Inference Engine with KV cache implementation and continuous batching.
-
-## Target Users
-
-- **Edge AI deployments**: Where binary size and startup time are critical
-- **Embedded systems**: Single binary, no Python runtime required
-- **High-frequency trading**: Minimal latency, deterministic performance
-- **Kernel researchers**: Direct access to launch custom CUDA kernels
-- **Rust/Zig ecosystem**: Native integration without FFI overhead
-- **Production teams**: Simpler deployment than Python stacks
-
-## What ZigCUDA is NOT
-
-- ❌ Not a replacement for PyTorch/TensorFlow training
-- ❌ Not competing with cuDNN/Marlin kernel performance  
-- ❌ Not a Python library (C ABI available for bindings)
-- ❌ Not multi-vendor (NVIDIA-first, ROCm planned for later)
-
-## Examples
-
-See the `examples/` directory for:
-- Basic tensor operations
-- Model loading and inference
-- Custom kernel launching
-- HTTP server usage
-- Performance benchmarking
-
-## Contributing
-
-Contributions are welcome! Please see the contributing guidelines and ensure all tests pass before submitting PRs.
-
-## License
-
-[Add license information here]
-
-## Support
-
-- Issues: [GitHub Issues]
-- Discussions: [GitHub Discussions]
-- Documentation: [docs/]
-
----
-
-*This project is part of the broader effort to bring high-performance AI inference to resource-constrained environments while maintaining the safety and performance benefits of the Zig language.*
+The architecture follows a clean dependency hierarchy where each layer depends only on the layers beneath it, enabling modular compilation and testing of individual components."
