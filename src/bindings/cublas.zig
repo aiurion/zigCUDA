@@ -3,6 +3,14 @@
 
 const std = @import("std");
 
+/// Debug mode flag - set to true to enable all debug output, false for quiet operation  
+const DEBUG_MODE_ENABLED = false;
+
+/// Check if debug mode is enabled
+fn isDebugEnabled() bool {
+    return DEBUG_MODE_ENABLED;
+}
+
 pub const cublasStatus_t = enum(c_int) {
     success = 0,
     not_initialized = 1,
@@ -84,10 +92,14 @@ pub fn load() !void {
     const linux_lib_names = [_][]const u8{ "libcublas.so", "libcublas.so.12", "libcublas.so.11" };
 
     for (linux_lib_names) |name| {
-        std.debug.print("DEBUG: Trying Linux path: {s}\n", .{name});
+        if (isDebugEnabled()) {
+            std.debug.print("DEBUG: Trying Linux path: {s}\n", .{name});
+        }
         lib = std.DynLib.open(name) catch continue;
         if (lib != null) {
-            std.debug.print("SUCCESS: Loaded cuBLAS from standard paths!\n", .{});
+            if (isDebugEnabled()) {
+                std.debug.print("SUCCESS: Loaded cuBLAS from standard paths!\n", .{});
+            }
             break;
         }
     }
@@ -98,7 +110,9 @@ pub fn load() !void {
     };
     
     for (windows_paths) |path| {
-        std.debug.print("DEBUG: Trying Windows path: {s}\n", .{path});
+        if (isDebugEnabled()) {
+            std.debug.print("DEBUG: Trying Windows path: {s}\n", .{path});
+        }
         lib = std.DynLib.open(path) catch continue;
         if (lib != null) {
             std.debug.print("SUCCESS: Loaded cuBLAS from Windows!\n", .{});
@@ -134,13 +148,17 @@ pub fn load() !void {
     const l = &lib.?;
     
     // Load functions with 'v2' suffix first, fallback to non-suffixed versions
-    std.debug.print("DEBUG: Looking up cublasCreate symbol...\n", .{});
+    if (isDebugEnabled()) {
+        std.debug.print("DEBUG: Looking up cublasCreate symbol...\n", .{});
+    }
     cublasCreate = (l.lookup(@TypeOf(cublasCreate), "cublasCreate_v2")) orelse
                  l.lookup(@TypeOf(cublasCreate), "cublasCreate") orelse {
         std.debug.print("ERROR: Could not find cublasCreate symbol\n", .{});
         return error.SymbolNotFound;
     };
-    std.debug.print("DEBUG: Found cublasCreate at: {*}\n", .{cublasCreate});
+    if (isDebugEnabled()) {
+        std.debug.print("DEBUG: Found cublasCreate at: {*}\n", .{cublasCreate});
+    }
     cublasDestroy = l.lookup(@TypeOf(cublasDestroy), "cublasDestroy_v2") orelse
                  l.lookup(@TypeOf(cublasDestroy), "cublasDestroy") orelse {
         std.debug.print("ERROR: Could not find cublasDestroy symbol\n", .{});

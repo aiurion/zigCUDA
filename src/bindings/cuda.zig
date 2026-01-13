@@ -5,6 +5,14 @@
 const std = @import("std");
 pub const errors = @import("errors.zig");
 
+/// Debug mode flag - set to true to enable all debug output, false for quiet operation
+const DEBUG_MODE_ENABLED = false;
+
+/// Check if debug mode is enabled
+fn isDebugEnabled() bool {
+    return DEBUG_MODE_ENABLED;
+}
+
 // Use C's dlopen instead of Zig's DynLib for WSL compatibility
 const c = @cImport({
     @cInclude("dlfcn.h");
@@ -265,7 +273,9 @@ pub fn load() !void {
     for (lib_paths) |path| {
         lib_handle = c.dlopen(path, c.RTLD_NOW);
         if (lib_handle != null) {
-            std.debug.print("DEBUG: Loaded CUDA library from {s}\n", .{path});
+            if (isDebugEnabled()) {
+                std.debug.print("DEBUG: Loaded CUDA library from {s}\n", .{path});
+            }
             break;
         }
     }
@@ -278,11 +288,15 @@ pub fn load() !void {
         return error.CudaLibraryNotFound;
     }
 
-    std.debug.print("DEBUG: Using library handle at address {*}\n", .{lib_handle});
+    if (isDebugEnabled()) {
+        std.debug.print("DEBUG: Using library handle at address {*}\n", .{lib_handle});
+    }
 
     // Core functions (required)
     cuInit = dlsym_lookup(@TypeOf(cuInit.?), "cuInit") orelse return error.SymbolNotFound;
-    std.debug.print("DEBUG: cuInit loaded at address {x}\n", .{@intFromPtr(cuInit.?)});
+    if (isDebugEnabled()) {
+        std.debug.print("DEBUG: cuInit loaded at address {x}\n", .{@intFromPtr(cuInit.?)});
+    }
 
     cuDriverGetVersion = dlsym_lookup(@TypeOf(cuDriverGetVersion.?), "cuDriverGetVersion") orelse return error.SymbolNotFound;
     cuDeviceGetCount = dlsym_lookup(@TypeOf(cuDeviceGetCount.?), "cuDeviceGetCount") orelse return error.SymbolNotFound;
@@ -304,7 +318,9 @@ pub fn load() !void {
         std.debug.print("ERROR: cuMemAlloc not found\n", .{});
         return error.SymbolNotFound;
     }
-    std.debug.print("DEBUG: Found cuMemAlloc symbol at {x}\n", .{@intFromPtr(cuMemAlloc.?)});
+    if (isDebugEnabled()) {
+        std.debug.print("DEBUG: Found cuMemAlloc symbol at {x}\n", .{@intFromPtr(cuMemAlloc.?)});
+    }
 
     cuMemFree = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree") orelse
         dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree_v2");
@@ -312,7 +328,9 @@ pub fn load() !void {
         std.debug.print("ERROR: cuMemFree not found\n", .{});
         return error.SymbolNotFound;
     }
-    std.debug.print("DEBUG: Found cuMemFree symbol at {x}\n", .{@intFromPtr(cuMemFree.?)});
+    if (isDebugEnabled()) {
+        std.debug.print("DEBUG: Found cuMemFree symbol at {x}\n", .{@intFromPtr(cuMemFree.?)});
+    }
 
     cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse
         dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
@@ -398,7 +416,9 @@ pub fn init(flags: c_int) errors.CUDAError!void {
     try load();
 
     if (cuInit) |f| {
-        std.debug.print("DEBUG: Calling cuInit with flags {d}...\n", .{flags});
+        if (isDebugEnabled()) {
+            std.debug.print("DEBUG: Calling cuInit with flags {d}...\n", .{flags});
+        }
         const result = f(flags);
         if (result != CUDA_SUCCESS) {
             std.debug.print("ERROR: cuInit failed with code {d}\n", .{result});
