@@ -56,37 +56,31 @@ zig build -Doptimize=ReleaseFast
 
 ### Basic Usage
 
-```zig
+```// examples/basic_cuda.zig
+const std = @import("std");
 const cuda = @import("cuda");
-const tensor = @import("tensor");
 
 pub fn main() !void {
-    // Initialize CUDA
-    try cuda.init();
+    // Initialize
+    try cuda.load();
+    try cuda.init(0);
     
-    // Get first GPU device
-    var device = try cuda.Device.init(0);
+    const device_count = try cuda.getDeviceCount();
+    std.debug.print("Found {} CUDA device(s)\n", .{device_count});
     
-    // Create context
-    var ctx = try cuda.Context.init(&device);
+    // Get device info
+    const device = try cuda.getDevice(0);
+    _ = device;
     
-    // Load and run inference
-    // ... see examples/ directory
+    // Allocate memory
+    var d_ptr: cuda.CUdeviceptr = 0;
+    try cuda.allocate(&d_ptr, 1024);
+    defer cuda.free(d_ptr) catch {};
+    
+    std.debug.print("Successfully allocated 1KB on GPU\n", .{});
 }
 ```
 
-### Command Line Usage
-
-```bash
-# Start server
-./zigcuda serve --model ./llama-7b-gptq --port 8080
-
-# Benchmark performance
-./zigcuda bench --model ./llama-7b-gptq --batch-size 32
-
-# Model information
-./zigcuda info --model ./llama-7b-gptq
-```
 
 ## 🤖 Planned Features (Not Yet Implemented)
 

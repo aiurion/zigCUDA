@@ -44,6 +44,9 @@ fn checkCudaError(result: i32) !void {
 // Actual cuBLAS implementation
 pub const Cublas = struct {
     handle: CublasHandle,
+    device: cuda.CUdevice,
+    primary_context: ?*cuda.CUcontext,  // For cuBLAS operations
+    memory_context: ?*cuda.CUcontext,   // For memory operations (WSL workaround)
 
     pub fn init() !Cublas {
         // Load CUDA library
@@ -57,24 +60,46 @@ pub const Cublas = struct {
             return error.CudaError;
         }
 
-        // Use the exact pattern from working tests
+        // Get device
         const count = try cuda.getDeviceCount();
         if (count == 0) return error.CudaError;
-        
+
         const dev = try cuda.getDevice(0);
         var ctx: ?*cuda.CUcontext = null;
 
-        // Follow EXACTLY the working test pattern
-        if (cuda.cuCtxCreate) |f| {
-            _ = f(&ctx, 0, dev);
+        // First, try to set flags (ignore error if already active)
+        if (cuda.cuDevicePrimaryCtxSetFlags) |f| {
+            const flags_result = f(dev, 0);
+            // Ignore error 708 (already active)
+            _ = flags_result;
         }
 
-        // Load cuBLAS library  
+        // Retain primary context - cuBLAS requires this
+        if (cuda.cuDevicePrimaryCtxRetain) |f| {
+            const ctx_result = f(&ctx, dev);
+            if (ctx_result != 0 or ctx == null) {
+                std.debug.print("ERROR: Failed to retain primary context\n", .{});
+                return error.CudaError;
+            }
+        } else {
+            return error.CudaError;
+        }
+
+        // Set as current
+        if (cuda.cuCtxSetCurrent) |f| {
+            const set_result = f(ctx.?);
+            if (set_result != 0) {
+                std.debug.print("ERROR: Failed to set context current\n", .{});
+                return error.CudaError;
+            }
+        }
+
+        // Load cuBLAS library
         cublas_bindings.load() catch {
             return error.CudaError;
         };
 
-        // Create cuBLAS handle - should work with proper context
+        // Create cuBLAS handle with primary context
         var handle: cublas_bindings.cublasHandle_t = null;
 
         const status = cublas_bindings.cublasCreate(&handle);
@@ -93,22 +118,80 @@ pub const Cublas = struct {
             return error.CudaError;
         }
 
+        // HYBRID CONTEXT SOLUTION:
+        // Primary context works for cuBLAS but not for memory operations in WSL
+        // Create a regular context for memory operations
+        var memory_ctx: ?*cuda.CUcontext = null;
+        if (cuda.cuCtxCreate) |f| {
+            const mem_ctx_result = f(&memory_ctx, 0, dev);
+            std.debug.print("DEBUG: Created memory context: result={}, ctx={?}\n", .{mem_ctx_result, memory_ctx});
+            if (mem_ctx_result != 0 or memory_ctx == null) {
+                std.debug.print("ERROR: Failed to create memory context\n", .{});
+                _ = cublas_bindings.cublasDestroy(handle.?);
+                return error.CudaError;
+            }
+        } else {
+            _ = cublas_bindings.cublasDestroy(handle.?);
+            return error.CudaError;
+        }
+
         const cublas_instance = Cublas{
             .handle = handle,
+            .device = dev,
+            .primary_context = ctx,
+            .memory_context = memory_ctx,
         };
-        
-        std.debug.print("DEBUG: cuBLAS instance created successfully with proper context\n", .{});
-        
+
+        std.debug.print("DEBUG: cuBLAS instance created with hybrid contexts\n", .{});
+
         return cublas_instance;
     }
 
     pub fn deinit(self: *Cublas) !void {
+        // Destroy cuBLAS handle first
         if (self.handle) |h| {
             const status = cublas_bindings.cublasDestroy(h);
             try checkCublasError(status);
         }
+
+        // Destroy the memory context
+        if (self.memory_context) |mem_ctx| {
+            if (cuda.cuCtxDestroy) |f| {
+                const destroy_result = f(mem_ctx);
+                try checkCudaError(destroy_result);
+            }
+        }
+
+        // NOTE: We do NOT release the primary context - it persists for program lifetime
+        // This is correct behavior for primary contexts which are shared/reference-counted
     }
-    
+
+    // Switch to memory context for CUDA operations (WSL hybrid context workaround)
+    fn setMemoryContext(self: *Cublas) !void {
+        if (self.memory_context) |ctx| {
+            if (cuda.cuCtxSetCurrent) |f| {
+                const result = f(ctx);
+                if (result != 0) {
+                    std.debug.print("ERROR: Failed to set memory context current: {}\n", .{result});
+                    return error.CudaError;
+                }
+            }
+        }
+    }
+
+    // Switch back to primary context for cuBLAS operations
+    fn setPrimaryContext(self: *Cublas) !void {
+        if (self.primary_context) |ctx| {
+            if (cuda.cuCtxSetCurrent) |f| {
+                const result = f(ctx);
+                if (result != 0) {
+                    std.debug.print("ERROR: Failed to set primary context current: {}\n", .{result});
+                    return error.CudaError;
+                }
+            }
+        }
+    }
+
     pub fn sgemm(
         self: *Cublas,
         m: usize, n: usize, k: usize,
@@ -118,6 +201,11 @@ pub const Cublas = struct {
         beta: f32,
         c: []f32, ldc: usize
     ) !void {
+        std.debug.print("DEBUG sgemm: Starting with m={}, n={}, k={}\n", .{m, n, k});
+
+        // Switch to memory context for CUDA memory operations
+        try self.setMemoryContext();
+
         // Convert row-major to column-major by swapping matrices
         // Row-major: C(m×n) = A(m×k) × B(k×n)
         // Column-major: C^T(n×m) = B^T(n×k) × A^T(k×m)
@@ -137,40 +225,61 @@ pub const Cublas = struct {
         const size_b = b.len * @sizeOf(f32);
         const size_c = c.len * @sizeOf(f32);
 
+        std.debug.print("DEBUG sgemm: Allocating memory - A:{} bytes, B:{} bytes, C:{} bytes\n", .{size_a, size_b, size_c});
+
+        // Verify current context before allocation
+        var current_ctx: ?*cuda.CUcontext = null;
+        if (cuda.cuCtxGetCurrent) |f| {
+            const get_result = f(&current_ctx);
+            std.debug.print("DEBUG sgemm: cuCtxGetCurrent result={}, ctx={?}\n", .{get_result, current_ctx});
+        }
+
         // Allocate and copy A
         if (cuda.cuMemAlloc) |f| {
-            try checkCudaError(f(&d_a, size_a));
+            const alloc_result = f(&d_a, size_a);
+            std.debug.print("DEBUG sgemm: cuMemAlloc A result: {}, ptr: {}\n", .{alloc_result, d_a});
+            try checkCudaError(alloc_result);
         } else return error.CudaError;
         errdefer {
             if (cuda.cuMemFree) |f| _ = f(d_a);
         }
 
         if (cuda.cuMemcpyHtoD) |f| {
-            try checkCudaError(f(d_a, a.ptr, size_a));
+            const copy_result = f(d_a, a.ptr, size_a);
+            std.debug.print("DEBUG sgemm: cuMemcpyHtoD A result: {}\n", .{copy_result});
+            try checkCudaError(copy_result);
         } else return error.CudaError;
 
         // Allocate and copy B
         if (cuda.cuMemAlloc) |f| {
-            try checkCudaError(f(&d_b, size_b));
+            const alloc_result = f(&d_b, size_b);
+            std.debug.print("DEBUG sgemm: cuMemAlloc B result: {}, ptr: {}\n", .{alloc_result, d_b});
+            try checkCudaError(alloc_result);
         } else return error.CudaError;
         errdefer {
             if (cuda.cuMemFree) |f| _ = f(d_b);
         }
 
         if (cuda.cuMemcpyHtoD) |f| {
-            try checkCudaError(f(d_b, b.ptr, size_b));
+            const copy_result = f(d_b, b.ptr, size_b);
+            std.debug.print("DEBUG sgemm: cuMemcpyHtoD B result: {}\n", .{copy_result});
+            try checkCudaError(copy_result);
         } else return error.CudaError;
 
         // Allocate and copy C
         if (cuda.cuMemAlloc) |f| {
-            try checkCudaError(f(&d_c, size_c));
+            const alloc_result = f(&d_c, size_c);
+            std.debug.print("DEBUG sgemm: cuMemAlloc C result: {}, ptr: {}\n", .{alloc_result, d_c});
+            try checkCudaError(alloc_result);
         } else return error.CudaError;
         errdefer {
             if (cuda.cuMemFree) |f| _ = f(d_c);
         }
 
         if (cuda.cuMemcpyHtoD) |f| {
-            try checkCudaError(f(d_c, c.ptr, size_c));
+            const copy_result = f(d_c, c.ptr, size_c);
+            std.debug.print("DEBUG sgemm: cuMemcpyHtoD C result: {}\n", .{copy_result});
+            try checkCudaError(copy_result);
         } else return error.CudaError;
 
         defer {
@@ -180,6 +289,9 @@ pub const Cublas = struct {
                 _ = f(d_a);
             }
         }
+
+        // Switch to primary context for cuBLAS operation
+        try self.setPrimaryContext();
 
         // Call cuBLAS sgemm with swapped matrices for row-major to column-major conversion
         const trans_a: c_int = 0; // CUBLAS_OP_N
@@ -200,6 +312,9 @@ pub const Cublas = struct {
         );
         std.debug.print("DEBUG sgemm returned status: {}\n", .{@intFromEnum(status)});
         try checkCublasError(status);
+
+        // Switch back to memory context for copy operation
+        try self.setMemoryContext();
 
         // Copy result back to host
         if (cuda.cuMemcpyDtoH) |f| {
@@ -230,6 +345,9 @@ pub const Cublas = struct {
         beta: f32,
         y: []f32, incy: c_int
     ) !void {
+        // Switch to memory context for allocations
+        try self.setMemoryContext();
+
         // For row-major to column-major conversion:
         // Row-major no-transpose becomes column-major transpose
         const n_i = @as(c_int, @intCast(m)); // Swap m and n
@@ -289,6 +407,9 @@ pub const Cublas = struct {
             }
         }
 
+        // Switch to primary context for cuBLAS operation
+        try self.setPrimaryContext();
+
         // Call cuBLAS sgemv
         const status = cublas_bindings.cublasSgemv(
             self.handle,
@@ -302,6 +423,9 @@ pub const Cublas = struct {
         );
         try checkCublasError(status);
 
+        // Switch back to memory context for copy
+        try self.setMemoryContext();
+
         // Copy result back to host
         if (cuda.cuMemcpyDtoH) |f| {
             try checkCudaError(f(y.ptr, d_y, size_y));
@@ -314,6 +438,8 @@ pub const Cublas = struct {
         x: []const f32, incx: c_int,
         y: []const f32, incy: c_int
     ) !f32 {
+        try self.setMemoryContext();
+
         const n_i = @as(c_int, @intCast(n));
 
         // Allocate device memory
@@ -355,6 +481,9 @@ pub const Cublas = struct {
             }
         }
 
+        // Switch to primary context for cuBLAS operation
+        try self.setPrimaryContext();
+
         // Call cuBLAS sdot
         const status = cublas_bindings.cublasSdot(
             self.handle,
@@ -377,6 +506,8 @@ pub const Cublas = struct {
         x: []const f32, incx: c_int,
         y: []f32, incy: c_int
     ) !void {
+        try self.setMemoryContext();
+
         const n_i = @as(c_int, @intCast(n));
 
         var d_x: cuda.CUdeviceptr = 0;
@@ -416,6 +547,9 @@ pub const Cublas = struct {
             }
         }
 
+        // Switch to primary context for cuBLAS operation
+        try self.setPrimaryContext();
+
         // Call cuBLAS saxpy
         const status = cublas_bindings.cublasSaxpy(
             self.handle,
@@ -425,6 +559,9 @@ pub const Cublas = struct {
             @as([*]f32, @ptrFromInt(d_y)), incy
         );
         try checkCublasError(status);
+
+        // Switch back to memory context for copy
+        try self.setMemoryContext();
 
         // Copy result back to host
         if (cuda.cuMemcpyDtoH) |f| {
@@ -449,6 +586,8 @@ pub const Cublas = struct {
         alpha: f32,
         x: []f32, incx: c_int
     ) !void {
+        try self.setMemoryContext();
+
         const n_i = @as(c_int, @intCast(n));
 
         var d_x: cuda.CUdeviceptr = 0;
@@ -466,6 +605,9 @@ pub const Cublas = struct {
             try checkCudaError(f(d_x, x.ptr, size_x));
         } else return error.CudaError;
 
+        // Switch to primary context for cuBLAS operation
+        try self.setPrimaryContext();
+
         // Call cuBLAS sscal
         const status = cublas_bindings.cublasSscal(
             self.handle,
@@ -474,6 +616,9 @@ pub const Cublas = struct {
             @as([*]f32, @ptrFromInt(d_x)), incx
         );
         try checkCublasError(status);
+
+        // Switch back to memory context for copy
+        try self.setMemoryContext();
 
         // Copy result back to host
         if (cuda.cuMemcpyDtoH) |f| {

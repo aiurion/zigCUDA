@@ -201,6 +201,11 @@ pub var cuCtxSetCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = nu
 pub var cuCtxGetCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxPushCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxPopCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
+
+// Primary Context Management
+pub var cuDevicePrimaryCtxRetain: ?*const fn (pctx: *?*CUcontext, device: CUdevice) callconv(.c) CUresult = null;
+pub var cuDevicePrimaryCtxRelease: ?*const fn (device: CUdevice) callconv(.c) CUresult = null;
+pub var cuDevicePrimaryCtxSetFlags: ?*const fn (device: CUdevice, flags: c_uint) callconv(.c) CUresult = null;
 pub var cuModuleGetFunction: ?*const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 
 // Additional Module & Kernel Management Functions
@@ -338,6 +343,11 @@ pub fn load() !void {
     cuCtxGetCurrent = dlsym_lookup(@TypeOf(cuCtxGetCurrent.?), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
     cuCtxPushCurrent = dlsym_lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
     cuCtxPopCurrent = dlsym_lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
+
+    // Primary Context Management (recommended for libraries like cuBLAS)
+    cuDevicePrimaryCtxRetain = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxRetain.?), "cuDevicePrimaryCtxRetain") orelse return error.SymbolNotFound;
+    cuDevicePrimaryCtxRelease = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxRelease.?), "cuDevicePrimaryCtxRelease") orelse return error.SymbolNotFound;
+    cuDevicePrimaryCtxSetFlags = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxSetFlags.?), "cuDevicePrimaryCtxSetFlags") orelse return error.SymbolNotFound;
 
     // Modules (required)
     cuModuleLoad = dlsym_lookup(@TypeOf(cuModuleLoad.?), "cuModuleLoad") orelse return error.SymbolNotFound;

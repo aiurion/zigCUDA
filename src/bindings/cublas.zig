@@ -73,10 +73,9 @@ pub fn load() !void {
     const lib_names = [_][]const u8{ "libcublas.so", "libcublas.so.12", "libcublas.so.11", "libcublas.so.10" };
 
     for (lib_names) |name| {
-        std.debug.print("DEBUG: Trying Linux library: {s}\n", .{name});
         lib = std.DynLib.open(name) catch continue;
         if (lib != null) {
-            std.debug.print("SUCCESS: Loaded cuBLAS from standard paths!\n", .{});
+            std.debug.print("SUCCESS: Loaded cuBLAS from: {s}\n", .{name});
             break;
         }
     }
@@ -122,25 +121,31 @@ pub fn load() !void {
         }
     }
 
-    // Fallback
-    const default_path = "/usr/lib/wsl/lib/libcublas.so.13";
-    
-    lib = std.DynLib.open(default_path) catch blk: {
-        break :blk null;
-    };
-    
+    // Fallback - only try if library not yet loaded
     if (lib == null) {
-        return error.CublasLibraryNotFound;
+        const default_path = "/usr/lib/wsl/lib/libcublas.so.13";
+
+        lib = std.DynLib.open(default_path) catch {
+            return error.CublasLibraryNotFound;
+        };
     }
 
     // Create a reference to the loaded library for symbol lookup
     const l = &lib.?;
     
     // Load functions with 'v2' suffix first, fallback to non-suffixed versions
-    cublasCreate = (l.lookup(@TypeOf(cublasCreate), "cublasCreate_v2")) orelse 
-                 l.lookup(@TypeOf(cublasCreate), "cublasCreate") orelse return error.SymbolNotFound;
+    std.debug.print("DEBUG: Looking up cublasCreate symbol...\n", .{});
+    cublasCreate = (l.lookup(@TypeOf(cublasCreate), "cublasCreate_v2")) orelse
+                 l.lookup(@TypeOf(cublasCreate), "cublasCreate") orelse {
+        std.debug.print("ERROR: Could not find cublasCreate symbol\n", .{});
+        return error.SymbolNotFound;
+    };
+    std.debug.print("DEBUG: Found cublasCreate at: {*}\n", .{cublasCreate});
     cublasDestroy = l.lookup(@TypeOf(cublasDestroy), "cublasDestroy_v2") orelse
-                 l.lookup(@TypeOf(cublasDestroy), "cublasDestroy") orelse return error.SymbolNotFound;
+                 l.lookup(@TypeOf(cublasDestroy), "cublasDestroy") orelse {
+        std.debug.print("ERROR: Could not find cublasDestroy symbol\n", .{});
+        return error.SymbolNotFound;
+    };
 
     // Note: cublasSetStream_v2 is standard, fallback to non-suffixed
     if (l.lookup(@TypeOf(cublasSetStream), "cublasSetStream_v2")) |f| {
@@ -148,6 +153,7 @@ pub fn load() !void {
     } else if (l.lookup(@TypeOf(cublasSetStream), "cublasSetStream")) |f2| {
         cublasSetStream = f2;
     } else {
+        std.debug.print("ERROR: Could not find cublasSetStream symbol\n", .{});
         return error.SymbolNotFound;
     }
 
