@@ -5,14 +5,14 @@ const std = @import("std");
 
 pub const cublasStatus_t = enum(c_int) {
     success = 0,
-    invalid_value = 1,
-    not_supported = 2,
+    not_initialized = 1,
     allocation_failed = 3,
-    internal_error = 4,
-    invalid_handle = 5,
-    driver_version = 6,
-    runtime_warning = 7,
-    runtime_pending = 8,
+    invalid_value = 7,
+    arch_mismatch = 8,
+    mapping_error = 11,
+    execution_failed = 13,
+    internal_error = 14,
+    insufficient_resources = 15,
 };
 
 pub const cublasHandle_t = ?*anyopaque;
@@ -20,7 +20,7 @@ pub const cublasLtMatDescriptor_t = ?*anyopaque;
 pub const cublasLtMatrixLayout_t = ?*anyopaque;
 
 // Library state
-var lib: ?std.DynLib = null;
+pub var lib: ?std.DynLib = null;
 
 // Function Pointers
 pub var cublasCreate: *const fn (handle: *?*anyopaque) callconv(.c) cublasStatus_t = undefined;
@@ -42,43 +42,150 @@ pub var cublasSdot: *const fn (handle: ?*anyopaque, n: c_int, x: [*]const f32, i
 
 pub var cublasDdot: *const fn (handle: ?*anyopaque, n: c_int, x: [*]const f64, incx: c_int, y: [*]const f64, incy: c_int, result: *f64) callconv(.c) cublasStatus_t = undefined;
 
+// Vector operations - Functions 59-62
+pub var cublasSaxpy: *const fn (handle: ?*anyopaque, n: c_int, alpha: *const f32, x: [*]const f32, incx: c_int, y: [*]f32, incy: c_int) callconv(.c) cublasStatus_t = undefined;
+
+pub var cublasDaxpy: *const fn (handle: ?*anyopaque, n: c_int, alpha: *const f64, x: [*]const f64, incx: c_int, y: [*]f64, incy: c_int) callconv(.c) cublasStatus_t = undefined;
+
+pub var cublasSscal: *const fn (handle: ?*anyopaque, n: c_int, alpha: *const f32, x: [*]f32, incx: c_int) callconv(.c) cublasStatus_t = undefined;
+
+pub var cublasDscal: *const fn (handle: ?*anyopaque, n: c_int, alpha: *const f64, x: [*]f64, incx: c_int) callconv(.c) cublasStatus_t = undefined;
+
+// Batched matrix multiplication - Functions 63-64
+pub var cublasSgemmBatched: *const fn (handle: ?*anyopaque, trans_a: c_int, trans_b: c_int, m: c_int, n: c_int, k: c_int, alpha: *const f32, a_array: [*]const [*]const f32, lda: c_int, b_array: [*]const [*]const f32, ldb: c_int, beta: *const f32, c_array: [*][*]f32, ldc: c_int, batch_count: c_int) callconv(.c) cublasStatus_t = undefined;
+
+pub var cublasDgemmBatched: *const fn (handle: ?*anyopaque, trans_a: c_int, trans_b: c_int, m: c_int, n: c_int, k: c_int, alpha: *const f64, a_array: [*]const [*]const f64, lda: c_int, b_array: [*]const [*]const f64, ldb: c_int, beta: *const f64, c_array: [*][*]f64, ldc: c_int, batch_count: c_int) callconv(.c) cublasStatus_t = undefined;
+
+// Pointer mode configuration - Function 65
+pub const CUBLAS_POINTER_MODE_HOST = 0;
+pub const CUBLAS_POINTER_MODE_DEVICE = 1;
+
+// Operation types for matrix operations
+pub const CUBLAS_OP_N: c_int = 0; // Normal (no transpose)
+pub const CUBLAS_OP_T: c_int = 1; // Transpose
+
+pub var cublasSetPointerMode: *const fn (handle: ?*anyopaque, pointer_mode: c_int) callconv(.c) cublasStatus_t = undefined;
+
 pub fn load() !void {
     if (lib != null) return;
 
-    // Try common library names
-    // On Linux typically libcublas.so or libcublas.so.11 (or .12)
+    // Try common library names first
     const lib_names = [_][]const u8{ "libcublas.so", "libcublas.so.12", "libcublas.so.11", "libcublas.so.10" };
 
     for (lib_names) |name| {
+        std.debug.print("DEBUG: Trying Linux library: {s}\n", .{name});
         lib = std.DynLib.open(name) catch continue;
-        break;
+        if (lib != null) {
+            std.debug.print("SUCCESS: Loaded cuBLAS from standard paths!\n", .{});
+            break;
+        }
     }
 
+    // Try common library names first
+    const linux_lib_names = [_][]const u8{ "libcublas.so", "libcublas.so.12", "libcublas.so.11" };
+
+    for (linux_lib_names) |name| {
+        std.debug.print("DEBUG: Trying Linux path: {s}\n", .{name});
+        lib = std.DynLib.open(name) catch continue;
+        if (lib != null) {
+            std.debug.print("SUCCESS: Loaded cuBLAS from standard paths!\n", .{});
+            break;
+        }
+    }
+
+    // Try Windows partition path via WSL
+    const windows_paths = [_][]const u8{
+        "/mnt/c/Program Files/NVIDIA GPU Computing Toolkit/CUDA/v13.0/bin/x64/cublas64_13.dll",
+    };
+    
+    for (windows_paths) |path| {
+        std.debug.print("DEBUG: Trying Windows path: {s}\n", .{path});
+        lib = std.DynLib.open(path) catch continue;
+        if (lib != null) {
+            std.debug.print("SUCCESS: Loaded cuBLAS from Windows!\n", .{});
+            break;
+        }
+    }
+
+    // Try WSL paths
+    const wsl_paths = [_][]const u8{
+        "/usr/lib/wsl/lib/libcublas.so.13",
+        "/usr/lib/wsl/lib/libcublas.so.12",
+        "/usr/lib/wsl/lib/libcublas.so.11" 
+    };
+    
+    for (wsl_paths) |path| {
+        lib = std.DynLib.open(path) catch continue;
+        if (lib != null) {
+            std.debug.print("SUCCESS: Loaded cuBLAS from WSL!\n", .{});
+            break;
+        }
+    }
+
+    // Fallback
+    const default_path = "/usr/lib/wsl/lib/libcublas.so.13";
+    
+    lib = std.DynLib.open(default_path) catch blk: {
+        break :blk null;
+    };
+    
     if (lib == null) {
-        // Fallback for WSL default locations if not in LD_LIBRARY_PATH
-        const wsl_path = "/usr/lib/wsl/lib/libcublas.so.12"; // V12 is common now
-        lib = std.DynLib.open(wsl_path) catch blk: {
-            // Try older version
-            break :blk std.DynLib.open("/usr/lib/wsl/lib/libcublas.so.11") catch null;
-        };
+        return error.CublasLibraryNotFound;
     }
 
-    if (lib == null) return error.CublasLibraryNotFound;
+    // Create a reference to the loaded library for symbol lookup
     const l = &lib.?;
+    
+    // Load functions with 'v2' suffix first, fallback to non-suffixed versions
+    cublasCreate = (l.lookup(@TypeOf(cublasCreate), "cublasCreate_v2")) orelse 
+                 l.lookup(@TypeOf(cublasCreate), "cublasCreate") orelse return error.SymbolNotFound;
+    cublasDestroy = l.lookup(@TypeOf(cublasDestroy), "cublasDestroy_v2") orelse
+                 l.lookup(@TypeOf(cublasDestroy), "cublasDestroy") orelse return error.SymbolNotFound;
 
-    // Load functions with 'v2' suffix which is standard for cuBLAS
-    cublasCreate = l.lookup(@TypeOf(cublasCreate), "cublasCreate_v2") orelse return error.SymbolNotFound;
-    cublasDestroy = l.lookup(@TypeOf(cublasDestroy), "cublasDestroy_v2") orelse return error.SymbolNotFound;
+    // Note: cublasSetStream_v2 is standard, fallback to non-suffixed
+    if (l.lookup(@TypeOf(cublasSetStream), "cublasSetStream_v2")) |f| {
+        cublasSetStream = f;
+    } else if (l.lookup(@TypeOf(cublasSetStream), "cublasSetStream")) |f2| {
+        cublasSetStream = f2;
+    } else {
+        return error.SymbolNotFound;
+    }
 
-    // Note: cublasSetStream_v2 is standard
-    cublasSetStream = l.lookup(@TypeOf(cublasSetStream), "cublasSetStream_v2") orelse return error.SymbolNotFound;
+    // Matrix multiplication functions - try v2 first, then fallback
+    cublasSgemm = l.lookup(@TypeOf(cublasSgemm), "cublasSgemm_v2") orelse 
+                l.lookup(@TypeOf(cublasSgemm), "cublasSgemm") orelse return error.SymbolNotFound;
+    cublasDgemm = l.lookup(@TypeOf(cublasDgemm), "cublasDgemm_v2") orelse
+                l.lookup(@TypeOf(cublasDgemm), "cublasDgemm") orelse return error.SymbolNotFound;
 
-    cublasSgemm = l.lookup(@TypeOf(cublasSgemm), "cublasSgemm_v2") orelse return error.SymbolNotFound;
-    cublasDgemm = l.lookup(@TypeOf(cublasDgemm), "cublasDgemm_v2") orelse return error.SymbolNotFound;
+    // Matrix-vector multiplication - try v2 first, then fallback  
+    cublasSgemv = l.lookup(@TypeOf(cublasSgemv), "cublasSgemv_v2") orelse
+                l.lookup(@TypeOf(cublasSgemv), "cublasSgemv") orelse return error.SymbolNotFound;
+    cublasDgemv = l.lookup(@TypeOf(cublasDgemv), "cublasDgemv_v2") orelse
+                l.lookup(@TypeOf(cublasDgemv), "cublasDgemv") orelse return error.SymbolNotFound;
 
-    cublasSgemv = l.lookup(@TypeOf(cublasSgemv), "cublasSgemv_v2") orelse return error.SymbolNotFound;
-    cublasDgemv = l.lookup(@TypeOf(cublasDgemv), "cublasDgemv_v2") orelse return error.SymbolNotFound;
+    // Dot product functions - try v2 first, then fallback
+    cublasSdot = l.lookup(@TypeOf(cublasSdot), "cublasSdot_v2") orelse
+                l.lookup(@TypeOf(cublasSdot), "cublasSdot") orelse return error.SymbolNotFound;
+    cublasDdot = l.lookup(@TypeOf(cublasDdot), "cublasDdot_v2") orelse
+               l.lookup(@TypeOf(cublasDdot), "cublasDdot") orelse return error.SymbolNotFound;
 
-    cublasSdot = l.lookup(@TypeOf(cublasSdot), "cublasSdot_v2") orelse return error.SymbolNotFound;
-    cublasDdot = l.lookup(@TypeOf(cublasDdot), "cublasDdot_v2") orelse return error.SymbolNotFound;
+    // Vector operations - Functions 59-62 - try v2 first, then fallback
+    cublasSaxpy = l.lookup(@TypeOf(cublasSaxpy), "cublasSaxpy_v2") orelse
+                l.lookup(@TypeOf(cublasSaxpy), "cublasSaxpy") orelse return error.SymbolNotFound;
+    cublasDaxpy = l.lookup(@TypeOf(cublasDaxpy), "cublasDaxpy_v2") orelse
+               l.lookup(@TypeOf(cublasDaxpy), "cublasDaxpy") orelse return error.SymbolNotFound;
+    cublasSscal = l.lookup(@TypeOf(cublasSscal), "cublasSscal_v2") orelse
+                l.lookup(@TypeOf(cublasSscal), "cublasSscal") orelse return error.SymbolNotFound;
+    cublasDscal = l.lookup(@TypeOf(cublasDscal), "cublasDscal_v2") orelse
+               l.lookup(@TypeOf(cublasDscal), "cublasDscal") orelse return error.SymbolNotFound;
+
+    // Batched matrix multiplication - Functions 63-64 - try v2 first, then fallback
+    cublasSgemmBatched = l.lookup(@TypeOf(cublasSgemmBatched), "cublasSgemmBatched_v2") orelse
+                      l.lookup(@TypeOf(cublasSgemmBatched), "cublasSgemmBatched") orelse return error.SymbolNotFound;
+    cublasDgemmBatched = l.lookup(@TypeOf(cublasDgemmBatched), "cublasDgemmBatched_v2") orelse
+                         l.lookup(@TypeOf(cublasDgemmBatched), "cublasDgemmBatched") orelse return error.SymbolNotFound;
+
+    // Pointer mode configuration - Function 65 - try v2 first, then fallback
+    cublasSetPointerMode = l.lookup(@TypeOf(cublasSetPointerMode), "cublasSetPointerMode_v2") orelse
+                      l.lookup(@TypeOf(cublasSetPointerMode), "cublasSetPointerMode") orelse return error.SymbolNotFound;
 }

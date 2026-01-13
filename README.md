@@ -2,33 +2,40 @@
 
 A comprehensive native CUDA API binding for the Zig programming language, providing direct access to NVIDIA's CUDA runtime and libraries without the overhead of C FFI.
 
-## 🎯 Key Features
+> **Status**: Research Prototype - Solid foundation with 86+ tests passing, ready for experimentation and contribution
 
-- **Native Zig Integration**: Direct bindings to CUDA Driver API, cuBLAS, and cuRNN
-- **Type-Safe Kernel Launch**: Compile-time verification of kernel parameters
-- **Memory Pool Management**: Efficient GPU memory allocation and management
-- **Quantized Model Support**: Native support for INT4/INT8 quantized models (GPTQ, AWQ)
-- **Production-Ready**: HTTP server with OpenAI-compatible API
-- **Single Binary Deployment**: No external dependencies beyond NVIDIA driver
+## 🎯 Key Features (Implemented)
 
-## 📊 Performance Characteristics
+- **Native Zig Integration**: Direct bindings to CUDA Driver API with dynamic loading
+- **Type-Safe Kernel Launch**: Compile-time verification of kernel parameters  
+- **Memory Management**: Efficient GPU memory allocation and resource management
+- **Comprehensive Testing**: 86+ unit tests covering core functionality
+- **Zero External Dependencies**: No Python runtime, no C FFI complexity
 
-| Metric | vLLM | TRT-LLM | ZigCUDA |
-|--------|------|----------|----------|
-| Binary Size | ~500MB+ | ~1GB+ | **<5MB** |
-| Startup Time | 10-30s | 30-60s | **<1s** |
-| Memory Safety | Manual | Manual | **Compile-time** |
+## 📊 Current Status
+
+| Component | Tests Passing | Implementation |
+|-----------|---------------|------------------|
+| CUDA Driver API | ✅ 44/46 | Production quality bindings |
+| Kernel System | ✅ 23/23 | Full type-safe kernel launching |  
+| Runtime Core | ✅ 13/13 | Memory/streams/events working |
+| cuBLAS Integration | �️ Partial | Library loads, symbol resolution in progress |
 
 ## 🏗️ Architecture
 
-### Core Components
+### Core Components (Implemented)
 
-- **CUDA Bindings** (`src/bindings/`): CUDA Driver API, cuBLAS, type definitions, error mapping
-- **Core Runtime** (`src/core/`): Device management, context handling, memory pools, kernel launching
+- **CUDA Bindings** (`src/bindings/`): CUDA Driver API with comprehensive error handling and dynamic loading
+- **Core Runtime** (`src/core/`): Device management, context handling, memory pools, type-safe kernel launching  
+- **Testing Infrastructure**: Comprehensive unit test suite covering all major components
+- **Library Integrations** (`src/integrations/`): cuBLAS wrapper (partial implementation)
+
+### Planned Components
+
 - **Tensor Operations** (`src/ops/`): Matrix multiplication, attention mechanisms, normalization, activations
-- **Library Integrations** (`src/integrations/`): cuBLAS wrapper, Marlin INT4 kernels, Flash Attention
 - **Model Loading**: Safetensors, GPTQ, AWQ format support
 - **Inference Engine**: KV cache management, continuous batching, production server
+- **Library Integrations**: Marlin INT4 kernels, Flash Attention
 
 ## 🚀 Quick Start
 
@@ -81,29 +88,27 @@ pub fn main() !void {
 ./zigcuda info --model ./llama-7b-gptq
 ```
 
-## 🤖 Model Loading
+## 🤖 Planned Features (Not Yet Implemented)
 
-Supports multiple model formats:
+The following features are planned for future releases:
 
-- **Safetensors**: Standard PyTorch model format
-- **GPTQ**: Quantized models with INT4 dequantization
-- **AWQ**: Alternative quantization format
+- **Model Loading**: Support for Safetensors, GPTQ, AWQ formats
+- **Tensor Operations**: Matrix multiplication, attention mechanisms, normalization  
+- **Inference Engine**: KV cache management and batching
+- **HTTP API**: OpenAI-compatible endpoints for serving models
+- **Command Line Tools**: Model serving and benchmarking utilities
 
-## 🌐 HTTP API
+## 🎯 Current Use Cases
 
-OpenAI-compatible API endpoints:
-- `POST /v1/chat/completions` - Chat completions
-- `POST /v1/completions` - Text completions  
-- `GET /v1/models` - List available models
-- `GET /health` - Health check
+This research prototype is currently useful for:
 
-## 🎯 Target Use Cases
+- **CUDA Researchers**: Direct native bindings without C FFI complexity
+- **Zig Developers**: Type-safe kernel launching with compile-time validation  
+- **GPU Programmers**: Testing and experimenting with CUDA operations
+- **Embedded Systems Research**: Exploring lightweight CUDA runtime alternatives
+- **Performance Experiments**: Benchmarking native vs Python-based stacks
 
-- **Edge AI deployments**: Where binary size and startup time are critical
-- **Embedded systems**: Single binary, no Python runtime required
-- **High-frequency trading**: Minimal latency, deterministic performance
-- **Kernel researchers**: Direct access to launch custom CUDA kernels
-- **Production teams**: Simpler deployment than Python stacks
+*Note: Production deployment not recommended until model loading and inference engine are implemented.*
 
 ## 📁 Project Structure
 
@@ -118,13 +123,19 @@ src/
 
 ## 🛠️ Development Status
 
-- [x] Phase 0: Driver Bindings
-- [ ] Phase 1: Core Runtime
-- [ ] Phase 2: Kernel Integration
-- [ ] Phase 3: Tensor Layer
-- [ ] Phase 4: Model Loading
-- [ ] Phase 5: Inference Engine (In Progress)
-- [ ] Phase 6: Production Serving
+### ✅ Completed Phases
+- **Phase 0: Driver Bindings** - Complete with 44/46 comprehensive tests passing
+- **Phase 1: Core Runtime** - Complete with 13/13 memory/streams/events working  
+- **Phase 2: Kernel Integration** - Complete with 23/23 type-safe kernel launching
+
+### 🔧 In Progress
+- **cuBLAS Integration**: Library loads successfully, symbol resolution in progress
+
+### �️ Planned Phases (Not Started)
+- **Tensor Layer**: Matrix operations, attention mechanisms, normalization layers
+- **Model Loading**: Support for Safetensors, GPTQ, AWQ formats  
+- **Inference Engine**: KV cache management and batching system
+- **Production Serving**: HTTP API server with OpenAI-compatible endpoints
 
 ## 🤝 Contributing
 
@@ -136,4 +147,6 @@ Contributions are welcome! Please see the contributing guidelines and ensure all
 
 ---
 
-*Bringing high-performance AI inference to resource-constrained environments with Zig's safety and performance benefits.*
+*A research prototype for native CUDA bindings in Zig, providing type-safe access to GPU computation without C FFI complexity. Perfect for experimentation and development of GPU-accelerated applications.*
+
+*Current focus: Solid foundation with comprehensive testing suite - production AI inference features coming in future releases.*

@@ -46,6 +46,8 @@ pub const CUDAError = error{
     SymbolNotFound,
     /// Feature not supported
     NotSupported,
+    /// Resource or symbol not found
+    NotFound,
 };
 
 /// Map CUDA result to Zig error (assumes result is not success)
@@ -56,30 +58,36 @@ pub fn cudaError(result: c_int) CUDAError {
         2 => error.OutOfMemory,
         3 => error.Uninitialized, // CUDA_ERROR_NOT_INITIALIZED
         4 => error.Uninitialized, // CUDA_ERROR_DEINITIALIZED
-        
+
         100 => error.NoDevice,
         101 => error.InvalidDevice,
-        
-        200 => error.InvalidValue, // Invalid Image
+
+        200 => error.NotSupported, // Invalid Image - feature not supported for this image format
         201 => error.InvalidContext,
         202 => error.ContextAlreadyCurrent,
-        
+
         210 => error.DeviceAlreadyActive,
-        
+
         300 => error.InvalidValue, // Invalid Source
         301 => error.InvalidValue, // File not found (mapped to invalid value for now)
         304 => error.OperatingSystemError,
-        
+
         400 => error.InvalidContextHandle, // Invalid Handle
-        
+
+        500 => error.NotFound, // Not Found - resource or symbol not found
         600 => error.NotReady,
-        
+
         700 => error.MemoryAllocation, // Illegal Address
         719 => error.Unknown, // Launch Failed
-        
+
         999 => error.Unknown,
         else => error.Unknown,
     };
+}
+
+/// Alias for cudaError to maintain compatibility with existing code
+pub fn mapCudaError(result: c_int) CUDAError {
+    return cudaError(result);
 }
 
 /// Convert CUresult to error string
@@ -94,6 +102,7 @@ pub fn resultToString(result: c_int) []const u8 {
         200 => "CUDA_ERROR_INVALID_IMAGE",
         201 => "CUDA_ERROR_INVALID_CONTEXT",
         304 => "CUDA_ERROR_OPERATING_SYSTEM",
+        500 => "CUDA_ERROR_NOT_FOUND",
         999 => "CUDA_ERROR_UNKNOWN",
         else => "CUDA_ERROR_UNKNOWN_CODE",
     };

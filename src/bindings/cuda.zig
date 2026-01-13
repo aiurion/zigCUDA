@@ -3,7 +3,7 @@
 // Phase 0: Essential Bindings Implementation
 
 const std = @import("std");
-const errors = @import("errors.zig");
+pub const errors = @import("errors.zig");
 
 // Use C's dlopen instead of Zig's DynLib for WSL compatibility
 const c = @cImport({
@@ -207,6 +207,7 @@ pub var cuModuleGetFunction: ?*const fn (pfunc: *?*CUfunction, module: *CUmodule
 pub var cuModuleGetGlobal: ?*const fn (pglobal: *?*anyopaque, pbytesize: *c_size_t, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 pub var cuModuleGetTexRef: ?*const fn (ptref: *?*anyopaque, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 pub var cuModuleLaunch: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = null;
+pub var cuLaunchKernel: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, gridDimZ: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque, extra: [*]?*anyopaque) callconv(.c) CUresult = null;
 pub var cuModuleLaunchCooperative: ?*const fn (function: *CUfunction, gridDimX: c_uint, gridDimY: c_uint, blockDimX: c_uint, blockDimY: c_uint, blockDimZ: c_uint, sharedMemBytes: c_uint, stream: ?*CUstream, kernel_params: [*]?*anyopaque) callconv(.c) CUresult = null;
 
 // Function/Kernel Configuration
@@ -348,6 +349,7 @@ pub fn load() !void {
     cuModuleGetGlobal = dlsym_lookup(@TypeOf(cuModuleGetGlobal.?), "cuModuleGetGlobal");
     cuModuleGetTexRef = dlsym_lookup(@TypeOf(cuModuleGetTexRef.?), "cuModuleGetTexRef");
     cuModuleLaunch = dlsym_lookup(@TypeOf(cuModuleLaunch.?), "cuModuleLaunch");
+    cuLaunchKernel = dlsym_lookup(@TypeOf(cuLaunchKernel.?), "cuLaunchKernel");
     cuModuleLaunchCooperative = dlsym_lookup(@TypeOf(cuModuleLaunchCooperative.?), "cuModuleLaunchCooperative");
 
     // Function/Kernel Configuration Functions (optional)
@@ -881,15 +883,28 @@ pub fn getTextureFromModule(module: *CUmodule, name: [:0]const c_char) errors.CU
 
 /// Launch kernel synchronously from module
 pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uint, block_dim_x: c_uint, block_dim_y: c_uint, block_dim_z: c_uint, shared_mem_bytes: c_uint, stream: ?*CUstream, kernel_params: []?*anyopaque) errors.CUDAError!void {
-    if (cuModuleLaunch != undefined and cuModuleLaunch != null) {
-        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]?*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunch));
+    // Convert slice to C array (CUDA expects non-optional pointers)
+    var params_array: [32]*anyopaque = undefined; // Max 32 parameters
+    const param_count = @min(kernel_params.len, 32);
+    for (0..param_count) |i| {
+        params_array[i] = kernel_params[i] orelse return error.InvalidValue;
+    }
 
-        // Convert slice to C array
-        var params_array: [32]?*anyopaque = undefined; // Max 32 parameters
-        const param_count = @min(kernel_params.len, 32);
-        for (0..param_count) |i| {
-            params_array[i] = kernel_params[i];
+    // Try modern cuLaunchKernel first (CUDA 4.0+)
+    if (cuLaunchKernel) |launch_fn| {
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]*anyopaque, ?[*]*anyopaque) callconv(.c) CUresult, @ptrCast(launch_fn));
+
+        const result = fn_ptr(function, grid_dim_x, grid_dim_y, 1, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, &params_array, null);
+
+        if (result == CUDA_SUCCESS) {
+            return;
         }
+        return errors.cudaError(result);
+    }
+
+    // Fallback to deprecated cuModuleLaunch (CUDA 2.0-3.x)
+    if (cuModuleLaunch) |launch_fn| {
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]*anyopaque) callconv(.c) CUresult, @ptrCast(launch_fn));
 
         const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, &params_array);
 
@@ -897,23 +912,23 @@ pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uin
             return;
         }
         return errors.cudaError(result);
-    } else {
-        // Fallback - synchronous execution not available
-        std.log.warn("cuModuleLaunch not available on this system", .{});
-        return error.SymbolNotFound;
     }
+
+    // No kernel launch API available
+    std.log.warn("Neither cuLaunchKernel nor cuModuleLaunch available on this system", .{});
+    return error.SymbolNotFound;
 }
 
 /// Launch cooperative kernels from module
 pub fn launchCooperativeKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uint, block_dim_x: c_uint, block_dim_y: c_uint, block_dim_z: c_uint, shared_mem_bytes: c_uint, stream: ?*CUstream, kernel_params: []?*anyopaque) errors.CUDAError!void {
     if (cuModuleLaunchCooperative != undefined and cuModuleLaunchCooperative != null) {
-        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]?*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunchCooperative));
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]*anyopaque) callconv(.c) CUresult, @ptrCast(cuModuleLaunchCooperative));
 
-        // Convert slice to C array
-        var params_array: [32]?*anyopaque = undefined; // Max 32 parameters
+        // Convert slice to C array (CUDA expects non-optional pointers)
+        var params_array: [32]*anyopaque = undefined; // Max 32 parameters
         const param_count = @min(kernel_params.len, 32);
         for (0..param_count) |i| {
-            params_array[i] = kernel_params[i];
+            params_array[i] = kernel_params[i] orelse return error.InvalidValue;
         }
 
         const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, &params_array);
