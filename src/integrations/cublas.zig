@@ -313,6 +313,11 @@ pub const Cublas = struct {
         std.debug.print("DEBUG sgemm returned status: {}\n", .{@intFromEnum(status)});
         try checkCublasError(status);
 
+        // Synchronize to ensure GPU computation completes before copying results
+        if (cuda.cuCtxSynchronize) |f| {
+            try checkCudaError(f());
+        } else return error.CudaError;
+
         // Switch back to memory context for copy operation
         try self.setMemoryContext();
 
@@ -323,17 +328,138 @@ pub const Cublas = struct {
     }
     
     pub fn dgemm(
-        _: *Cublas,
+        self: *Cublas,
         m: usize, n: usize, k: usize,
         alpha: f64,
         a: []const f64, lda: usize,
-        b: []const f64, ldb: usize, 
+        b: []const f64, ldb: usize,
         beta: f64,
         c: []f64, ldc: usize
     ) !void {
-        _ = m; _ = n; _ = k; _ = alpha; _ = a; _ = lda;
-        _ = b; _ = ldb; _ = beta; _ = c; _ = ldc;
-        // Stub implementation - no-op  
+        std.debug.print("DEBUG dgemm: Starting with m={}, n={}, k={}\n", .{m, n, k});
+
+        // Switch to memory context for CUDA memory operations
+        try self.setMemoryContext();
+
+        // Convert row-major to column-major by swapping matrices
+        // Row-major: C(m×n) = A(m×k) × B(k×n)
+        // Column-major: C^T(n×m) = B^T(n×k) × A^T(k×m)
+        const m_i = @as(c_int, @intCast(n)); // Swap m and n for column-major
+        const n_i = @as(c_int, @intCast(m));
+        const k_i = @as(c_int, @intCast(k));
+        const lda_i = @as(c_int, @intCast(ldb)); // Swap lda and ldb
+        const ldb_i = @as(c_int, @intCast(lda));
+        const ldc_i = @as(c_int, @intCast(ldc));
+
+        // Allocate device memory
+        var d_a: cuda.CUdeviceptr = 0;
+        var d_b: cuda.CUdeviceptr = 0;
+        var d_c: cuda.CUdeviceptr = 0;
+
+        const size_a = a.len * @sizeOf(f64);
+        const size_b = b.len * @sizeOf(f64);
+        const size_c = c.len * @sizeOf(f64);
+
+        std.debug.print("DEBUG dgemm: Allocating memory - A:{} bytes, B:{} bytes, C:{} bytes\n", .{size_a, size_b, size_c});
+
+        // Verify current context before allocation
+        var current_ctx: ?*cuda.CUcontext = null;
+        if (cuda.cuCtxGetCurrent) |f| {
+            const get_result = f(&current_ctx);
+            std.debug.print("DEBUG dgemm: cuCtxGetCurrent result={}, ctx={?}\n", .{get_result, current_ctx});
+        }
+
+        // Allocate and copy A
+        if (cuda.cuMemAlloc) |f| {
+            const alloc_result = f(&d_a, size_a);
+            std.debug.print("DEBUG dgemm: cuMemAlloc A result: {}, ptr: {}\n", .{alloc_result, d_a});
+            try checkCudaError(alloc_result);
+        } else return error.CudaError;
+        errdefer {
+            if (cuda.cuMemFree) |f| _ = f(d_a);
+        }
+
+        if (cuda.cuMemcpyHtoD) |f| {
+            const copy_result = f(d_a, a.ptr, size_a);
+            std.debug.print("DEBUG dgemm: cuMemcpyHtoD A result: {}\n", .{copy_result});
+            try checkCudaError(copy_result);
+        } else return error.CudaError;
+
+        // Allocate and copy B
+        if (cuda.cuMemAlloc) |f| {
+            const alloc_result = f(&d_b, size_b);
+            std.debug.print("DEBUG dgemm: cuMemAlloc B result: {}, ptr: {}\n", .{alloc_result, d_b});
+            try checkCudaError(alloc_result);
+        } else return error.CudaError;
+        errdefer {
+            if (cuda.cuMemFree) |f| _ = f(d_b);
+        }
+
+        if (cuda.cuMemcpyHtoD) |f| {
+            const copy_result = f(d_b, b.ptr, size_b);
+            std.debug.print("DEBUG dgemm: cuMemcpyHtoD B result: {}\n", .{copy_result});
+            try checkCudaError(copy_result);
+        } else return error.CudaError;
+
+        // Allocate and copy C
+        if (cuda.cuMemAlloc) |f| {
+            const alloc_result = f(&d_c, size_c);
+            std.debug.print("DEBUG dgemm: cuMemAlloc C result: {}, ptr: {}\n", .{alloc_result, d_c});
+            try checkCudaError(alloc_result);
+        } else return error.CudaError;
+        errdefer {
+            if (cuda.cuMemFree) |f| _ = f(d_c);
+        }
+
+        if (cuda.cuMemcpyHtoD) |f| {
+            const copy_result = f(d_c, c.ptr, size_c);
+            std.debug.print("DEBUG dgemm: cuMemcpyHtoD C result: {}\n", .{copy_result});
+            try checkCudaError(copy_result);
+        } else return error.CudaError;
+
+        defer {
+            if (cuda.cuMemFree) |f| {
+                _ = f(d_c);
+                _ = f(d_b);
+                _ = f(d_a);
+            }
+        }
+
+        // Switch to primary context for cuBLAS operation
+        try self.setPrimaryContext();
+
+        // Call cuBLAS dgemm with swapped matrices for row-major to column-major conversion
+        const trans_a: c_int = 0; // CUBLAS_OP_N
+        const trans_b: c_int = 0; // CUBLAS_OP_N
+
+        std.debug.print("DEBUG dgemm: m={}, n={}, k={}, lda={}, ldb={}, ldc={}\n", .{m_i, n_i, k_i, lda_i, ldb_i, ldc_i});
+        std.debug.print("DEBUG dgemm: d_a={}, d_b={}, d_c={}\n", .{d_a, d_b, d_c});
+
+        const status = cublas_bindings.cublasDgemm(
+            self.handle,
+            trans_a, trans_b,
+            m_i, n_i, k_i,
+            &alpha,
+            @as([*]const f64, @ptrFromInt(d_b)), lda_i, // Swap B and A
+            @as([*]const f64, @ptrFromInt(d_a)), ldb_i,
+            &beta,
+            @as([*]f64, @ptrFromInt(d_c)), ldc_i
+        );
+        std.debug.print("DEBUG dgemm returned status: {}\n", .{@intFromEnum(status)});
+        try checkCublasError(status);
+
+        // Synchronize to ensure GPU computation completes before copying results
+        if (cuda.cuCtxSynchronize) |f| {
+            try checkCudaError(f());
+        } else return error.CudaError;
+
+        // Switch back to memory context for copy operation
+        try self.setMemoryContext();
+
+        // Copy result back to host
+        if (cuda.cuMemcpyDtoH) |f| {
+            try checkCudaError(f(c.ptr, d_c, size_c));
+        } else return error.CudaError;
     }
     
     pub fn sgemv(

@@ -201,6 +201,7 @@ pub var cuCtxSetCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = nu
 pub var cuCtxGetCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxPushCurrent: ?*const fn (ctx: *CUcontext) callconv(.c) CUresult = null;
 pub var cuCtxPopCurrent: ?*const fn (pctx: *?*CUcontext) callconv(.c) CUresult = null;
+pub var cuCtxSynchronize: ?*const fn () callconv(.c) CUresult = null;
 
 // Primary Context Management
 pub var cuDevicePrimaryCtxRetain: ?*const fn (pctx: *?*CUcontext, device: CUdevice) callconv(.c) CUresult = null;
@@ -343,6 +344,7 @@ pub fn load() !void {
     cuCtxGetCurrent = dlsym_lookup(@TypeOf(cuCtxGetCurrent.?), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
     cuCtxPushCurrent = dlsym_lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
     cuCtxPopCurrent = dlsym_lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
+    cuCtxSynchronize = dlsym_lookup(@TypeOf(cuCtxSynchronize.?), "cuCtxSynchronize") orelse return error.SymbolNotFound;
 
     // Primary Context Management (recommended for libraries like cuBLAS)
     cuDevicePrimaryCtxRetain = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxRetain.?), "cuDevicePrimaryCtxRetain") orelse return error.SymbolNotFound;
