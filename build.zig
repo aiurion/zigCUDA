@@ -16,15 +16,15 @@ pub fn build(b: *std.Build) !void {
         .root_source_file = b.path("src/main.zig"),
         .target = target,
     });
-    
-    // Link the library module into the CLI executable  
+
+    // Link the library module into the CLI executable
     main_module.addImport("zigcuda", lib_module);
-    
+
     const cli_exe = b.addExecutable(.{
         .name = "zigcuda",
         .root_module = main_module,
     });
-    
+
     // Also link libc for the executable itself
     cli_exe.linkLibC();
 
@@ -37,7 +37,7 @@ pub fn build(b: *std.Build) !void {
     });
     run_cmd.addArtifactArg(cli_exe);
     run_cmd.step.dependOn(b.getInstallStep());
-    
+
     if (b.args) |args| {
         run_cmd.addArgs(args);
     }
@@ -45,16 +45,14 @@ pub fn build(b: *std.Build) !void {
     const run_step = b.step("run", "Run the CLI app");
     run_step.dependOn(&run_cmd.step);
 
-    // =============================================================================
     // COMPHENSIVE TEST INFRASTRUCTURE RESTORED
-    // =============================================================================
 
     // Create library tests that use the public API (not internal implementation)
     const lib_test_module = b.createModule(.{
         .root_source_file = b.path("test/lib_api_test.zig"),
         .target = target,
     });
-    
+
     // Add library import to test
     lib_test_module.addImport("zigcuda", lib_module);
 
@@ -64,7 +62,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
 
-    // Create core runtime test module (high-level abstraction integration testing)  
+    // Create core runtime test module (high-level abstraction integration testing)
     const runtime_test_module = b.createModule(.{
         .root_source_file = b.path("test/core_runtime_test.zig"),
         .target = target,
@@ -110,12 +108,10 @@ pub fn build(b: *std.Build) !void {
     kernel_integration_test_module.addImport("cuda", cuda_module);
     core_module.addImport("cuda", cuda_module);
 
-    // =============================================================================
-    // CREATE ALL TEST EXECUTABLES  
-    // =============================================================================
+    // CREATE ALL TEST EXECUTABLES
 
     const lib_tests = b.addTest(.{ .root_module = lib_test_module });
-    
+
     // Create bindings test executable (low-level API tests)
     const binding_tests = b.addTest(.{
         .root_module = bindings_test_module,
@@ -134,19 +130,17 @@ pub fn build(b: *std.Build) !void {
     // Link all test executables against system libc
     lib_tests.linkLibC();
     binding_tests.linkLibC();
-    runtime_tests.linkLibC();  
+    runtime_tests.linkLibC();
     kernel_integration_tests.linkLibC();
 
-    // =============================================================================
     // SYSTEM DYNAMIC LINKER COMFIGURATION FOR ALL TESTS
-    // =============================================================================
 
-    // Use system dynamic linker for library tests  
+    // Use system dynamic linker for library tests
     const run_lib_tests_cmd = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
     });
     run_lib_tests_cmd.addArtifactArg(lib_tests);
-    
+
     // Use system dynamic linker to avoid glibc mismatch issues for bindings tests
     const run_bindings_tests = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
@@ -159,15 +153,13 @@ pub fn build(b: *std.Build) !void {
     });
     run_runtime_tests.addArtifactArg(runtime_tests);
 
-    // Use system dynamic linker for kernel integration tests  
+    // Use system dynamic linker for kernel integration tests
     const run_kernel_integration_tests = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
     });
     run_kernel_integration_tests.addArtifactArg(kernel_integration_tests);
 
-    // =============================================================================
     // INDIVIDUAL TEST STEPS RESTORED
-    // =============================================================================
 
     const lib_test_step = b.step("test-lib", "Run library API tests");
     lib_test_step.dependOn(&run_lib_tests_cmd.step);
@@ -184,7 +176,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
 
-    // Add cuda import to simple integration tests  
+    // Add cuda import to simple integration tests
     simple_integration_test_module.addImport("cuda", cuda_module);
 
     // Create simple integration test executable
@@ -195,7 +187,7 @@ pub fn build(b: *std.Build) !void {
     // Link simple test against system libc
     simple_integration_tests.linkLibC();
 
-    // Use system dynamic linker for simple integration tests  
+    // Use system dynamic linker for simple integration tests
     const run_simple_integration_tests = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
     });
@@ -204,9 +196,7 @@ pub fn build(b: *std.Build) !void {
     const kernel_integration_test_step = b.step("test-kernel-integration", "Run high-level kernel abstraction tests");
     kernel_integration_test_step.dependOn(&run_kernel_integration_tests.step);
 
-    // =============================================================================
-    // CUBLAS TEST INFRASTRUCTURE RESTORED  
-    // =============================================================================
+    // CUBLAS TEST INFRASTRUCTURE RESTORED
 
     // Create cuBLAS bindings module
     const cublas_bindings_module = b.createModule(.{
@@ -230,7 +220,7 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
 
-    // Add imports to cuBLAS integration tests  
+    // Add imports to cuBLAS integration tests
     cublas_integration_test_module.addImport("cuda", cuda_module);
     cublas_integration_test_module.addImport("integrations", cublas_integration_module);
 
@@ -242,7 +232,7 @@ pub fn build(b: *std.Build) !void {
     // Link cuBLAS test against system libc
     cublas_integration_tests.linkLibC();
 
-    // Use system dynamic linker for cuBLAS integration tests  
+    // Use system dynamic linker for cuBLAS integration tests
     const run_cublas_integration_tests = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
     });
@@ -252,7 +242,7 @@ pub fn build(b: *std.Build) !void {
     const simple_integration_test_step = b.step("test-simple", "Run basic CUDA functionality tests");
     simple_integration_test_step.dependOn(&run_simple_integration_tests.step);
 
-    // Create simple cuBLAS test module  
+    // Create simple cuBLAS test module
     const cublas_simple_test_module = b.createModule(.{
         .root_source_file = b.path("test/cublas_integration_test_simple.zig"),
         .target = target,
@@ -270,7 +260,7 @@ pub fn build(b: *std.Build) !void {
     // Link simple cuBLAS test against system libc
     cublas_simple_tests.linkLibC();
 
-    // Use system dynamic linker for simple cuBLAS tests  
+    // Use system dynamic linker for simple cuBLAS tests
     const run_cublas_simple_tests = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
     });
@@ -280,7 +270,7 @@ pub fn build(b: *std.Build) !void {
     const cublas_integration_test_step = b.step("test-cublas-integration", "Run cuBLAS BLAS operations integration tests");
     cublas_integration_test_step.dependOn(&run_cublas_integration_tests.step);
 
-    // Add simple cuBLAS integration test step  
+    // Add simple cuBLAS integration test step
     const cublas_simple_test_step = b.step("test-cublas-simple", "Run simplified cuBLAS stub tests");
     cublas_simple_test_step.dependOn(&run_cublas_simple_tests.step);
 
@@ -298,7 +288,7 @@ pub fn build(b: *std.Build) !void {
     // Link Functions 59-65 tests against system libc
     functions_59_65_tests.linkLibC();
 
-    // Use system dynamic linker for Functions 59-65 tests  
+    // Use system dynamic linker for Functions 59-65 tests
     const run_functions_59_65_tests = b.addSystemCommand(&.{
         "/lib64/ld-linux-x86-64.so.2",
     });
@@ -308,9 +298,7 @@ pub fn build(b: *std.Build) !void {
     const functions_59_65_test_step = b.step("test-cublas-functions-59-65", "Run cuBLAS Functions 59-65 implementation tests");
     functions_59_65_test_step.dependOn(&run_functions_59_65_tests.step);
 
-    // =============================================================================
-    // COMBINED TEST STEP - RUNS ALL TESTS (original version)
-    // =============================================================================
+    // COMBINED TEST STEP - RUNS ALL TESTS
 
     const all_tests_step = b.step("test", "Run all tests (bindings + runtime + kernel integration + simple + cuBLAS integration)");
     all_tests_step.dependOn(bindings_test_step);

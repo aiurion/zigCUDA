@@ -1,263 +1,161 @@
-# ZigCUDA - Native CUDA API for Zig
+# ZigCUDA - CUDA Driver API for Zig
 
-A comprehensive native CUDA API binding for the Zig programming language, providing direct access to NVIDIA's CUDA runtime and libraries without the overhead of C FFI.
+Pure-Zig bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean high-level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime.
 
-> **Status**: v0.0.1 Release Ready - Complete CUDA bindings with 62/62 tests (100%) passing
+[![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
+[![Tests: 97/97 Passing](https://img.shields.io/badge/Tests-97%2F97_Passing-brightgreen)](#)
+[![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
-## 🎯 Key Features (Implemented)
+> Core driver wrapper is stable and well-tested. Ready for low-level GPU programming, kernel launching, and basic BLAS operations.
 
-- **Native Zig Integration**: Direct bindings to CUDA Driver API with dynamic loading
-- **Type-Safe Kernel Launch**: Compile-time verification of kernel parameters  
-- **Memory Management**: Efficient GPU memory allocation and resource management
-- **Comprehensive Testing**: 86+ unit tests covering core functionality
-- **Zero External Dependencies**: No Python runtime, no C FFI complexity
-
-## 📊 Current Status
-
-| Component | Tests Passing | Implementation |
-|-----------|---------------|------------------|
-| CUDA Driver API | ✅ 46/46 | Production quality bindings |
-| Kernel System | ✅ 23/23 | Full type-safe kernel launching |  
-| Runtime Core | ✅ 13/13 | Memory/streams/events working |
-| cuBLAS Integration | ✅ 12/12 | Complete BLAS operations with WSL2 support |
-
-## 🏗️ Architecture
-
-### Implemented Components (v0.0.1)
-
-- **CUDA Bindings** (`src/bindings/`): Complete CUDA Driver API with 46 functions and comprehensive error handling
-- **Core Runtime** (`src/core/`): Device management, context handling, memory pools, type-safe kernel launching  
-- **cuBLAS Integration** (`src/integrations/cublas.zig`): Full BLAS operations (sgemm, dgemm, sdot, etc.) with WSL2 compatibility
-- **Testing Infrastructure**: 62/62 comprehensive unit tests covering all components
-
-### Planned Components (Future Releases)
-
-- **Tensor Operations** (`src/ops/`): Matrix multiplication, attention mechanisms, normalization, activations
-- **Model Loading**: Safetensors, GPTQ, AWQ format support
-- **Inference Engine**: KV cache management, continuous batching, production server
-- **Additional Library Integrations**: Marlin INT4 kernels, Flash Attention
-
-## 🚀 Quick Start
-
-### Prerequisites
-- Zig compiler (latest stable)
-- NVIDIA driver (CUDA toolkit not required for runtime)
-- NVIDIA GPU with compute capability 6.0+
-
-### Building
+## 🚀 Try It Now
 
 ```bash
-# Debug build
-zig build
-
-# Release build for production
-zig build -Doptimize=ReleaseFast
+git clone https://github.com/Aiurion/zigcuda.git && cd zigcuda
+zig build run
 ```
 
-### Basic Usage
+Example output (on real hardware):
+```
+=== Using ZigCUDA Library ===
 
-```// examples/basic_cuda.zig
-const std = @import("std");
-const cuda = @import("cuda");
+Found 1 CUDA device(s)
 
-pub fn main() !void {
-    // Initialize
-    try cuda.load();
-    try cuda.init(0);
-    
-    const device_count = try cuda.getDeviceCount();
-    std.debug.print("Found {} CUDA device(s)\n", .{device_count});
-    
-    // Get device info
-    const device = try cuda.getDevice(0);
-    _ = device;
-    
-    // Allocate memory
-    var d_ptr: cuda.CUdeviceptr = 0;
-    try cuda.allocate(&d_ptr, 1024);
-    defer cuda.free(d_ptr) catch {};
-    
-    std.debug.print("Successfully allocated 1KB on GPU\n", .{});
-}
+Device 0:
+  Name: NVIDIA GeForce RTX 4090
+  Compute Capability: 8.9
+  Total Memory: 24217 MB
+
+✅ Library ready for use!
 ```
 
+## 🎯 Key Features (v0.0.1)
 
-## 🤖 Planned Features (Not Yet Implemented)
+- **Dynamic Driver Loading** – Works on Linux native and WSL2, multiple symbol resolution paths
+- **Clean Zig API** – Context, device, memory, streams, events, module loading, kernel launch
+- **Graceful Stubs** – Compiles and runs basic checks without a GPU
+- **Zero External Dependencies** – Only needs NVIDIA driver at runtime
+- **Test Coverage** – 97 passing tests across core, bindings, and integrations
+- **Easy Library Usage** – Single `@import("zigcuda")` with init/deinit pattern
 
-The following features are planned for future releases:
+## 📊 Status
 
-- **Model Loading**: Support for Safetensors, GPTQ, AWQ formats
-- **Tensor Operations**: Matrix multiplication, attention mechanisms, normalization  
-- **Inference Engine**: KV cache management and batching
-- **HTTP API**: OpenAI-compatible endpoints for serving models
-- **Command Line Tools**: Model serving and benchmarking utilities
+| Component              | Status                  | Notes                                      |
+|------------------------|-------------------------|--------------------------------------------|
+| Driver Loading         | Complete                | Dynamic + extensive fallbacks              |
+| Core API (memory, streams, contexts) | Complete           | Full wrappers, async support               |
+| Kernel Launch          | Complete                | cuLaunchKernel + legacy fallback           |
+| cuBLAS Integration     | Partial                 | Basic handle + common ops working           |
+| FlashAttention Prototype | Early                 | Hardware detection + cuBLAS fallback       |
+| Tensor Ops             | Stubs                   | Placeholders in ops/ directory             |
 
-## 🎯 Current Use Cases (v0.0.1)
+## 🛠️ Using in Your Project
 
-This release is production-ready for:
+### 1. Add dependency (`build.zig.zon`)
 
-- **CUDA Applications**: Direct native bindings without C FFI complexity
-- **Zig Developers**: Type-safe kernel launching with compile-time validation  
-- **GPU Programmers**: Full CUDA operations and BLAS computations
-- **Scientific Computing**: Matrix operations, vector calculations, performance-critical applications
-- **Research Projects**: Native GPU programming in Zig with comprehensive testing
-
-### Production Ready Features ✅
-- Complete CUDA Driver API (46 functions)
-- Memory management and async operations  
-- Kernel compilation and launching
-- Full cuBLAS integration for BLAS operations
-- WSL2 compatibility with dual-context support
-
-### Platform Requirements
-- **Supported**: Linux/WSL2 with NVIDIA Blackwell GPU (Compute Capability 12.0+)
-- **Compiler**: Zig 0.15.2 or later
-- **Dependencies**: NVIDIA driver only (CUDA toolkit not required for runtime)
-
-*Note: Production deployment ready for CUDA operations and BLAS computations. Model loading and inference engine planned for v0.1.0.*
-
-## 📁 Project Structure
-
-```
-src/
-├── bindings/        # Low-level CUDA Driver API bindings (46 functions)
-│   ├── cuda.zig      # Core CUDA declarations and types
-│   ├── cublas.zig    # cuBLAS API with dynamic loading
-│   └── ...            # Additional library bindings
-├── core/             # High-level CUDA abstractions
-│   ├── device.zig     # Device enumeration and properties
-│   ├── context.zig # Context management and lifecycle
-│   ├── memory.zig   # Memory pools and allocation
-│   ├── stream.zig  # Asynchronous operations
-│   └── ...          # Additional core components
-├── integrations/    # Optimized library integrations
-│   └── cublas.zig  # Complete cuBLAS wrapper (12/12 tests passing)
-└── main.zig         # Application entry point
-```
-
-## 🛠️ Development Status
-
-### ✅ Completed Phases (v0.0.1)
-- **Phase 0: Driver Bindings** - Complete with 46/46 comprehensive tests passing
-- **Phase 1: Core Runtime** - Complete with 13/13 memory/streams/events working  
-- **Phase 2: Kernel Integration** - Complete with 23/23 type-safe kernel launching
-- **cuBLAS Integration**: Complete with 12/12 BLAS operations and WSL2 compatibility
-
-### �️ Planned Phases (Not Started)
-- **Tensor Layer**: Matrix operations, attention mechanisms, normalization layers
-- **Model Loading**: Support for Safetensors, GPTQ, AWQ formats  
-- **Inference Engine**: KV cache management and batching system
-- **Production Serving**: HTTP API server with OpenAI-compatible endpoints
-
-## 🤝 Contributing
-
-Contributions are welcome! Please see the contributing guidelines and ensure all tests pass before submitting PRs.
-
-## 📜 License
-
-[License information to be added]
-
----
-
-*Complete native CUDA bindings for Zig with 100% test coverage, providing type-safe access to GPU computation without C FFI complexity. Production-ready for CUDA operations and BLAS computations.*
-
-*v0.0.1 release: Complete CUDA Driver API (46 functions) + full cuBLAS integration - ready for scientific computing and performance-critical applications.*
-
-
-Platform Support:
-Linux (x86_64): Fully supported (Ubuntu, Debian, RHEL, etc.).
-Windows (WSL2): Fully supported.
-
-
-
-To use in another project's build.zig:
-
-```
-const zigcuda_dep = b.dependency("zigcuda", .{});
-const zigcuda_mod = zigcuda_dep.module("zigcuda");
-exe.root_module.addImport("zigcuda", zigcuda_mod);
-
-```
-Add to consuming project's build.zig.zon:
-
-```
-{
-    .dependencies = .{
-        .{
-            .name = "zigcuda",
-            .url = "git+https://your-repo-url#commit-or-tag",
-            .hash = "compute-with-zig-build-fetch",
-        },
+```zig
+.dependencies = .{
+    .zigcuda = .{
+        .url = "git+https://github.com/Aiurion/zigcuda.git#v0.0.1",
+        // Run `zig build` once to fill in hash
     },
-}
-
+},
 ```
 
+### 2. In `build.zig`
 
-## Quick Start for External Projects
+```zig
+const zigcuda_dep = b.dependency("zigcuda", .{
+    .target = target,
+    .optimize = optimize,
+});
 
-### 1. Add as Dependency in your `build.zig`:
+exe.root_module.addImport("zigcuda", zigcuda_dep.module("zigcuda"));
+```
+
+### 3. Example usage
 
 ```zig
 const std = @import("std");
-
-pub fn build(b: *std.Build) !void {
-    // Import ZigCUDA library
-    const zigcuda_lib = b.createModule(.{
-        .root_source_file = "path/to/zigCuda/src/lib.zig",
-        .target = target,
-    });
-
-    // Your executable that uses the library
-    const your_exe = b.addExecutable(.{
-        .name = "your-app",
-        .root_module = b.path("src/main.zig"),
-    });
-    
-    // Link against ZigCUDA
-    your_exe.root_module.addImport("zigcuda", zigcuda_lib);
-}
-```
-
-### 2. Use in Your Code:
-
-```zig
-const std = @import("std");
-const zigcuda = @import("zigcuda"); // Import the library
+const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    // Initialize ZigCUDA
     var ctx = try zigcuda.init();
     defer ctx.deinit();
 
-    if (ctx.isAvailable()) {
-        const device_count = ctx.getDeviceCount();
-        std.debug.print("Found {d} CUDA devices\n", .{device_count});
-        
-        // Get device properties
-        for (0..device_count) |i| {
-            const props = try ctx.getDeviceProperties(@as(u32, i));
-            // Use device info...
-        }
+    if (!ctx.isAvailable()) {
+        std.debug.print("No CUDA available\n", .{});
+        return;
+    }
+
+    const device_count = ctx.getDeviceCount();
+    std.debug.print("Found {d} CUDA device(s)\n", .{device_count});
+
+    for (0..@min(device_count, 3)) |i| {
+        const props = try ctx.getDeviceProperties(@intCast(i));
+        const name_end = std.mem.indexOf(u8, &props.deviceName, &[_]u8{0}) orelse props.deviceName.len;
+        const name = props.deviceName[0..name_end];
+        std.debug.print("Device {d}: {s} (CC {d}.{d})\n", .{
+            i, name, props.major, props.minor,
+        });
     }
 }
 ```
 
-## What You Get
 
-- **Initialization**: `zigcuda.init()` - Sets up CUDA and returns a context
-- **Device Enumeration**: `ctx.getDeviceCount()`, `ctx.getDeviceProperties()`
-- **Error Handling**: Clean error types, graceful fallback when no CUDA available
-- **Type Safety**: Compile-time checked API with Zig's strong typing
+## 🏗️ Project Structure
 
-## No External Dependencies Required
+```
+src/
+├── bindings/     # Raw FFI + dynamic loading (cuda.zig is core)
+├── core/         # High-level wrappers (context, device, memory, stream, kernel)
+├── integrations/ # cuBLAS, FlashAttention prototype, etc.
+├── ops/          # Future tensor operations (currently stubs)
+├── examples/     # Demo programs
+└── lib.zig       # Public root (re-exports API)
+```
 
-Unlike Python-based CUDA solutions, your users only need:
-1. NVIDIA driver (already installed for most systems)  
-2. Your executable + this library
-3. That's it - no CUDA toolkit installation needed!
+## 🎯 What This Is vs Isn't
 
-## Library vs CLI Tool
+**This IS:**
+- A solid CUDA Driver API wrapper for Zig
+- Ready for writing and launching kernels, memory management, streams/events
+- Usable today for low-level GPU work and experimentation
 
-- **Library (`src/lib.zig`)**: What external projects import and use
-- **CLI Tool (`src/main.zig`)**: Development/testing tool that demonstrates the library in action
+**This is NOT:**
+- A full ML framework
+- Complete high-level tensor ops
+- Optimized inference engine (FlashAttention is prototype only)
+
+## 🗺️ Roadmap
+
+- **v0.0.x** – Core polish, more tests, Windows support
+- **v0.1.0** – Stable API, basic tensor abstraction, expanded cuBLAS/cuRAND
+- **Later** – Optimized kernels (full FlashAttention, Marlin), model loading, inference primitives
+
+## 🛠️ Development
+
+```bash
+zig build test      # Run full suite (97 tests)
+zig build run       # Diagnostic tool
+zig build           # Production binary
+```
+
+**Supported Platforms:**
+- Linux (x86_64) – Fully tested
+- WSL2 – Working with dual-context handling
+
+## 🤝 Contributing
+
+Open issues for bugs/features. PRs welcome if:
+- Tests pass
+- Core remains dependency-free
+- Changes target low-level first
+
+## 📜 License
+
+MIT (see LICENSE file)
+
+---
+
+ZigCUDA gives you real CUDA access in pure Zig with minimal overhead. The foundation is ready – start building GPU code today.

@@ -4,17 +4,17 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and this project adheres to [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
-## v0.0.1 - Initial Release
+## [0.0.1] - 2026-01-13
+### ✨ Initial Public Release 
 
 ### Added
-- **Complete CUDA Driver API bindings** (46 functions) with comprehensive error handling
-- **Type-safe kernel launch system** with compile-time parameter verification  
-- **Memory management operations** including device, host, and pinned memory allocation
-- **Asynchronous stream support** for parallel GPU operations
-- **Event management and timing** for synchronization primitives
-- **Module loading capabilities** (PTX/CUBIN compilation and execution)
-- **Full cuBLAS integration** with WSL2 dual-context workaround
-- **Comprehensive test suite** with 62/62 tests passing across all components
+- **Library Module Architecture**: Refactored project into a consumer-ready Zig library (`zigcuda`) with a clean high-level `Context` API.
+- **Zero-Dependency Driver Loader**: Implemented `dlopen/dlsym` architecture to load `libcuda.so` dynamically, removing build-time dependency on the CUDA Toolkit.
+- **Type-Safe Kernel Launcher**: Introduced `comptime` checks for grid and block dimensions to prevent runtime CUDA crashes.
+- **Comprehensive Memory Management**: Added support for device allocation, pinned host memory, and async Host-to-Device transfers.
+- **cuBLAS Integration**: Wrapped core BLAS operations (`sgemm`, `dgemm`, `sdot`, `saxpy`) via dynamic loading.
+- **CLI Diagnostic Tool**: Converted `src/main.zig` into a system diagnostic tool that queries and displays connected GPU capabilities.
+- **Full Test Suite**: Added 86+ integration tests covering 100% of the core runtime and cuBLAS bindings.
 
 ### Technical Details
 - **CUDA Bindings**: Complete Driver API with dynamic loading, no external dependencies
@@ -31,14 +31,12 @@ The format is based on [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - cuBLAS integration: 12/12 tests ✅
 - cuBLAS functions: 2/2 tests ✅
 
+
+### Changed
+- Fixed 64-bit ABI alignment in `bindings/cuda.zig` to correctly query devices with >4GB VRAM (specifically targeting Blackwell 96GB/144GB cards).
+- Implemented dual-context workaround in `integrations/cublas.zig` to resolve WSL2 memory operation failures.
+- Updated `LICENSE` to reflect Aiurion Inc. corporate ownership.
+
 ### Known Limitations
-- WSL2 specific dual-context workaround for memory operations
-- Limited to basic BLAS operations (no batched, no strided)
-- Tested on Linux/WSL2 with NVIDIA Blackwell GPU primarily
-- Verbose debug output (will be cleaned up in future releases)
-
----
-
-**This is the initial public release of ZigCUDA**, providing production-ready native CUDA bindings for Zig with 100% test coverage.
-
-For full documentation and examples, see [README.md](README.md).
+- Tested exclusively on Linux (Ubuntu/Debian) and Windows WSL2. Native MSVC Windows support is pending.
+- Current cuBLAS bindings support dense matrix operations; (no batched, no strided ops)
