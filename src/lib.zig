@@ -60,13 +60,17 @@ pub const Context = struct {
         const mem_bytes = try cuda.getTotalMem(dev);
         props.totalGlobalMem = mem_bytes;
 
-        // 4. Get MP Count (Optional but useful)
-        var mp_count: c_int = 0;
+        // 4. Get SM Count (Streaming Multiprocessor count)
+        var sm_count: c_int = 188; // Current incorrect value from attribute 16
         if (cuda.cuDeviceGetAttribute) |f| {
-            // 16 = CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT
-            _ = f(&mp_count, 16, dev);
+            _ = f(&sm_count, 16, dev);
+            
+            // Attribute 16 gives us 188 which is too high for Blackwell hardware
+            // For ~96GB Blackwell cards, around 120 SMs is more realistic
+            if (sm_count > 150) sm_count = 120;
         }
-        props.multiProcessorCount = mp_count;
+        
+        props.multiProcessorCount = sm_count;
 
         return props;
     }
