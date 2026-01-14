@@ -1,55 +1,48 @@
 // src/main.zig
-
 const std = @import("std");
-const cuda = @import("bindings/cuda.zig");
+const zigcuda = @import("zigcuda");
 
-pub fn main() void {
-    // Simple, clean startup message
-    std.debug.print("\n=== ZigCUDA: Native CUDA API for Zig ===\n", .{});
+pub fn main() !void {
+    std.debug.print("\n=== ZigCUDA CLI Diagnostic Tool ===\n", .{});
 
-    // Try to detect and initialize CUDA
-    const cuda_available = detectCuda();
+    var ctx = zigcuda.init() catch |err| {
+        switch (err) {
+            error.NoCudaDevice => {
+                std.debug.print("⚠  Success: Library loaded, but no CUDA devices found.\n", .{});
+                return;
+            },
+            error.CudaLoadFailed => {
+                std.debug.print("✗  Error: Could not load libcuda.so. Is the driver installed?\n", .{});
+                return;
+            },
+            else => {
+                std.debug.print("✗  Fatal Error during init: {}\n", .{err});
+                return;
+            },
+        }
+    };
+    defer ctx.deinit();
 
-    if (cuda_available) {
-        std.debug.print("✓ CUDA detected and initialized successfully\n", .{});
-    } else {
-        std.debug.print("✗ No CUDA available - using stub mode\n", .{});
+    if (ctx.isAvailable()) {
+        const count = ctx.getDeviceCount();
+        std.debug.print("✓  CUDA Driver Initialized\n", .{});
+        std.debug.print("✓  Device Count: {d}\n\n", .{count});
+
+        for (0..count) |i| {
+            if (ctx.getDeviceProperties(@intCast(i))) |props| {
+                // Name is now a standard Zig array, slice it to the first null byte
+                const name_slice = std.mem.sliceTo(&props.name, 0);
+
+                std.debug.print("   [GPU {d}] {s}\n", .{ i, name_slice });
+                std.debug.print("     ├─ Compute: {d}.{d}\n", .{ props.major, props.minor });
+                std.debug.print("     ├─ SMs:     {d}\n", .{props.multiProcessorCount});
+
+                const mem_gb = @as(f64, @floatFromInt(props.totalGlobalMem)) / (1024.0 * 1024.0 * 1024.0);
+                std.debug.print("     └─ VRAM:    {d:.2} GB\n", .{mem_gb});
+            } else |_| {
+                std.debug.print("   [GPU {d}] (Failed to query properties)\n", .{i});
+            }
+            std.debug.print("\n", .{});
+        }
     }
-
-    if (cuda_available) {
-        std.debug.print("\n=== ZigCUDA Ready ===\n\n", .{});
-    } else {
-        std.debug.print("\n=== ZigCUDA Ready (Stub Mode) ===\n\n", .{});
-    }
-}
-
-/// Detect if CUDA is available by trying to initialize
-fn detectCuda() bool {
-    // Try to load CUDA library
-    cuda.load() catch |err| {
-        std.debug.print("Failed to load CUDA library: {}\n", .{err});
-        return false;
-    };
-
-    // Try to initialize CUDA
-    cuda.init(0) catch |err| {
-        std.debug.print("Failed to initialize CUDA: {}\n", .{err});
-        return false;
-    };
-
-    // Try to get device count
-    const count = cuda.getDeviceCount() catch |err| {
-        std.debug.print("Failed to get device count: {}\n", .{err});
-        return false;
-    };
-
-    std.debug.print("Found {d} CUDA device(s)\n", .{count});
-    return count > 0;
-}
-
-/// Helper function
-fn fileExists(path: []const u8) bool {
-    var file = std.fs.cwd().openFile(path, .{}) catch return false;
-    defer file.close();
-    return true;
 }

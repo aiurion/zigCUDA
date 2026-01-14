@@ -162,3 +162,33 @@ Contributions are welcome! Please see the contributing guidelines and ensure all
 *Complete native CUDA bindings for Zig with 100% test coverage, providing type-safe access to GPU computation without C FFI complexity. Production-ready for CUDA operations and BLAS computations.*
 
 *v0.0.1 release: Complete CUDA Driver API (46 functions) + full cuBLAS integration - ready for scientific computing and performance-critical applications.*
+
+
+Platform Support:
+Linux (x86_64): Fully supported (Ubuntu, Debian, RHEL, etc.).
+Windows (WSL2): Fully supported.
+
+
+
+To use in another project's build.zig:
+
+```
+const zigcuda_dep = b.dependency("zigcuda", .{});
+const zigcuda_mod = zigcuda_dep.module("zigcuda");
+exe.root_module.addImport("zigcuda", zigcuda_mod);
+
+```
+Add to consuming project's build.zig.zon:
+
+```
+{
+    .dependencies = .{
+        .{
+            .name = "zigcuda",
+            .url = "git+https://your-repo-url#commit-or-tag",
+            .hash = "compute-with-zig-build-fetch",
+        },
+    },
+}
+
+```

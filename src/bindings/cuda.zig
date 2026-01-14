@@ -342,8 +342,9 @@ pub fn load() !void {
     // Optional helper lookups
     cuDeviceComputeCapability = dlsym_lookup(@TypeOf(cuDeviceComputeCapability.?), "cuDeviceComputeCapability");
     cuDeviceGetAttribute = dlsym_lookup(@TypeOf(cuDeviceGetAttribute.?), "cuDeviceGetAttribute");
-    cuDeviceTotalMem = dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem") orelse
-        dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem_v2");
+    // Prefer 64-bit version (v2) over 32-bit version to avoid memory size truncation
+    cuDeviceTotalMem = dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem_v2") orelse
+        dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem");
 
     // Async memory operations (optional)
     cuMemcpyHtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync");
