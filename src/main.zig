@@ -16,12 +16,6 @@ pub fn main() void {
         std.debug.print("✗ No CUDA available - using stub mode\n", .{});
     }
 
-    if (fileExists("test_runner.zig")) {
-        std.debug.print("\n--- Running Test Suite ---\n", .{});
-    } else {
-        std.debug.print("(Run 'zig run test_runner.zig' for tests)\n", .{});
-    }
-
     if (cuda_available) {
         std.debug.print("\n=== ZigCUDA Ready ===\n\n", .{});
     } else {
