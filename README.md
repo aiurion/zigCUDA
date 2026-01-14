@@ -43,11 +43,11 @@ Device 0:
 | Component              | Status                  | Notes                                      |
 |------------------------|-------------------------|--------------------------------------------|
 | Driver Loading         | Complete                | Dynamic + extensive fallbacks              |
-| Core API (memory, streams, contexts) | Complete           | Full wrappers, async support               |
+| Core API (memory, streams, contexts) | Complete           | Full wrappers, async support       |
 | Kernel Launch          | Complete                | cuLaunchKernel + legacy fallback           |
 | cuBLAS Integration     | Partial                 | Basic handle + common ops working           |
 | FlashAttention Prototype | Early                 | Hardware detection + cuBLAS fallback       |
-| Tensor Ops             | Stubs                   | Placeholders in ops/ directory             |
+
 
 ## 🛠️ Using in Your Project
 
