@@ -3,7 +3,7 @@
 Pure-Zig bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean high-level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime.
 
 [![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
-[![Tests: 97/97 Passing](https://img.shields.io/badge/Tests-97%2F97_Passing-brightgreen)](#)
+[![Tests: 95/97 Passing](https://img.shields.io/badge/Tests-97%2F97_Passing-brightgreen)](#)
 [![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
 > Core driver wrapper is stable and well-tested. Ready for low-level GPU programming, kernel launching, and basic BLAS operations.
