@@ -842,7 +842,10 @@ pub fn popContext() errors.CUDAError!*CUcontext {
 /// Load a CUDA module from file (.cubin/.ptx)
 pub fn loadModule(filename: [:0]const c_char) errors.CUDAError!*CUmodule {
     var module_handle: ?*CUmodule = null;
-    const result = cuModuleLoad(&module_handle, filename);
+    
+    // Check if function is loaded
+    const cu_module_load = cuModuleLoad orelse return error.SymbolNotFound;
+    const result = cu_module_load(&module_handle, filename);
     if (result == CUDA_SUCCESS) {
         return module_handle.?;
     }
@@ -852,7 +855,10 @@ pub fn loadModule(filename: [:0]const c_char) errors.CUDAError!*CUmodule {
 /// Load a CUDA module from memory
 pub fn loadModuleFromData(image: [:0]const c_char) errors.CUDAError!*CUmodule {
     var module_handle: ?*CUmodule = null;
-    const result = cuModuleLoadData(&module_handle, image);
+    
+    // Check if function is loaded
+    const cu_module_load_data = cuModuleLoadData orelse return error.SymbolNotFound;
+    const result = cu_module_load_data(&module_handle, image);
     if (result == CUDA_SUCCESS) {
         return module_handle.?;
     }
@@ -871,7 +877,10 @@ pub fn unloadModule(module: *CUmodule) errors.CUDAError!void {
 /// Get function handle from module
 pub fn getFunctionFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!*CUfunction {
     var func_handle: ?*CUfunction = null;
-    const result = cuModuleGetFunction(&func_handle, module, name);
+    
+    // Check if function is loaded
+    const cu_module_get_function = cuModuleGetFunction orelse return error.SymbolNotFound;
+    const result = cu_module_get_function(&func_handle, module, name);
     if (result == CUDA_SUCCESS) {
         return func_handle.?;
     }
