@@ -102,7 +102,7 @@ pub const Kernel = struct {
 
         // Pass parameters directly to CUDA bindings (correct parameter order)
         try bindings.launchKernel(self.function_handle, 
-            config.grid_size[0], config.grid_size[1],
+            config.grid_size[0], config.grid_size[1], 1,
             config.block_size[0], config.block_size[1], config.block_size[2],  
             config.shared_memory, null, params);
     }

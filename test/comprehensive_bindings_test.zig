@@ -1857,6 +1857,7 @@ test "launchKernel - zero parameter fix verification" {
         kernel_func.?,
         @as(u32, 1), // grid_dim_x  
         @as(u32, 1), // grid_dim_y
+        @as(u32, 1), // FIXED: added missing grid_dim_z
         @as(u32, 32), // block_dim_x
         @as(u32, 1), // block_dim_y  
         @as(u32, 1), // block_dim_z

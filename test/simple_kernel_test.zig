@@ -101,6 +101,7 @@ test "Zero Parameter Kernel Launch - Fix Verification" {
         mock_function,
         @as(u32, 1), // grid_dim_x  
         @as(u32, 1), // grid_dim_y
+        @as(u32, 1), // FIXED: added missing grid_dim_z
         @as(u32, 32), // block_dim_x
         @as(u32, 1), // block_dim_y  
         @as(u32, 1), // block_dim_z
