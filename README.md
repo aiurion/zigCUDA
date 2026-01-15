@@ -15,18 +15,19 @@ git clone https://github.com/Aiurion/zigcuda.git && cd zigcuda
 zig build run
 ```
 
-Example output (on real hardware):
+Example output:
+
 ```
-=== Using ZigCUDA Library ===
+=== ZigCUDA CLI Diagnostic Tool ===
+INFO: cuInit succeeded
+✓  CUDA Driver Initialized
+✓  Device Count: 1
 
-Found 1 CUDA device(s)
+   [GPU 0] NVIDIA RTX PRO 6000 Blackwell Workstation Edition
+     ├─ Compute: 12.0
+     ├─ SMs:     120
+     └─ VRAM:    95.59 GB
 
-Device 0:
-  Name: NVIDIA GeForce RTX 4090
-  Compute Capability: 8.9
-  Total Memory: 24217 MB
-
-✅ Library ready for use!
 ```
 
 ## 🎯 Key Features (v0.0.1)
@@ -75,30 +76,58 @@ exe.root_module.addImport("zigcuda", zigcuda_dep.module("zigcuda"));
 
 ### 3. Example usage
 
+**Basic device enumeration:**
 ```zig
 const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    var ctx = try zigcuda.init();
-    defer ctx.deinit();
+    try zigcuda.bindings.init();
 
-    if (!ctx.isAvailable()) {
-        std.debug.print("No CUDA available\n", .{});
-        return;
-    }
-
-    const device_count = ctx.getDeviceCount();
+    const device_count = try zigcuda.bindings.getDeviceCount();
     std.debug.print("Found {d} CUDA device(s)\n", .{device_count});
 
     for (0..@min(device_count, 3)) |i| {
-        const props = try ctx.getDeviceProperties(@intCast(i));
-        const name_end = std.mem.indexOf(u8, &props.deviceName, &[_]u8{0}) orelse props.deviceName.len;
-        const name = props.deviceName[0..name_end];
-        std.debug.print("Device {d}: {s} (CC {d}.{d})\n", .{
-            i, name, props.major, props.minor,
+        const props = try zigcuda.bindings.getDeviceProperties(@intCast(i));
+        std.debug.print("Device {d}: {s}\n", .{
+            i, @as([:0]const u8, @ptrCast(&props.name)),
         });
     }
+}
+```
+
+**Kernel launch example:**
+```zig
+const std = @import("std");
+const zigcuda = @import("zigcuda");
+
+pub fn main() !void {
+    try zigcuda.bindings.init();
+    
+    // Load compiled CUDA binary (.cubin file)
+    const filename: [:0]zigcuda.bindings.@"c_char" = "my_kernel.cubin";
+    const module = try zigcuda.bindings.loadModule(filename);
+    
+    var kernel_name_buf = "my_kernel".*;
+    const c_kernel_name: [:0]zigcuda.bindings.@"c_char" = @ptrCast(&kernel_name_buf);
+    const kernel_func = try zigcuda.bindings.getFunctionFromModule(module, c_kernel_name);
+
+    // Launch with correct parameter count (grid_dim_z is required!)
+    const empty_params: []?*anyopaque = &.{};
+    
+    try zigcuda.bindings.launchKernel(kernel_func,
+        1,          // grid_dim_x
+        1,          // grid_dim_y  
+        1,          // FIXED: grid_dim_z (cannot be 0!)
+        32,         // block_dim_x 
+        1,          // block_dim_y
+        1,          // block_dim_z
+        0,           // shared_mem_bytes
+        null,       // stream
+        empty_params // kernel parameters
+    );
+    
+    std.debug.print("Kernel launched successfully!\n", .{});
 }
 ```
 
@@ -136,9 +165,8 @@ src/
 ## 🛠️ Development
 
 ```bash
-zig build test      # Run full suite (97 tests)
+zig build run test      # Run full suite (97 tests)
 zig build run       # Diagnostic tool
-zig build           # Production binary
 ```
 
 **Supported Platforms:**
