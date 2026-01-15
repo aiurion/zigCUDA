@@ -412,7 +412,6 @@ pub fn load() !void {
     cuEventElapsedTime = dlsym_lookup(@TypeOf(cuEventElapsedTime.?), "cuEventElapsedTime");
 }
 
-
 pub fn init(flags: c_int) errors.CUDAError!void {
     try load();
 
@@ -985,7 +984,6 @@ pub fn launchCooperativeKernel(function: *CUfunction, grid_dim_x: c_uint, grid_d
         return error.SymbolNotFound;
     }
 }
-
 
 // ============================================================================
 // STREAM MANAGEMENT WRAPPERS (8 functions)
