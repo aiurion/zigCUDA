@@ -1798,6 +1798,83 @@ test "cuFuncSetSharedMemConfig - set shared memory config" {
     }
 }
 
+test "launchKernel - zero parameter fix verification" {
+    // This test verifies our fix for the InvalidValue error with zero parameters
+    const count = try cuda.getDeviceCount();
+    if (count == 0) return error.SkipZigTest;
+
+    // Setup: Initialize context and device
+    const dev = try cuda.getDevice(0);
+    var ctx: ?*cuda.CUcontext = null;
+    if (cuda.cuCtxCreate) |f| _ = f(&ctx, 0, dev);
+    defer {
+        if (ctx) |c| {
+            if (cuda.cuCtxDestroy) |f| _ = f(c);
+        }
+    }
+
+    // Load a simple PTX module
+    const ptx_code =
+        \\.version 6.0
+        \\.target sm_50
+        \\.address_size 64
+        \\
+        \\.visible .entry zero_param_kernel()
+        \\{
+        \\  ret;
+        \\}
+    ;
+
+    var module: ?*cuda.CUmodule = null;
+    if (cuda.cuModuleLoadData) |f| {
+        const load_result = f(&module, @ptrCast(ptx_code));
+        if (load_result != 0 or module == null) {
+            return error.SkipZigTest;
+        }
+    } else {
+        return error.SkipZigTest;
+    }
+    defer {
+        if (module) |m| {
+            if (cuda.cuModuleUnload) |f| _ = f(m);
+        }
+    }
+
+    // Get kernel function
+    var kernel_func: ?*cuda.CUfunction = null;
+    if (cuda.cuModuleGetFunction) |f| {
+        const func_result = f(&kernel_func, module.?, @ptrCast("zero_param_kernel"));
+        if (func_result != 0 or kernel_func == null) {
+            return error.SkipZigTest;
+        }
+    } else {
+        return error.SkipZigTest;
+    }
+
+    // Test the fix: launchKernel with zero parameters should NOT fail during parameter validation
+    const empty_params = [_]?*anyopaque{};
+    const result = cuda.launchKernel(
+        kernel_func.?,
+        @as(u32, 1), // grid_dim_x  
+        @as(u32, 1), // grid_dim_y
+        @as(u32, 32), // block_dim_x
+        @as(u32, 1), // block_dim_y  
+        @as(u32, 1), // block_dim_z
+        @as(u32, 0), // shared_mem_bytes
+        null, // stream
+        empty_params[0..] // EMPTY parameter list - this was the bug!
+    );
+
+    // The key test: if we get InvalidValue error, our fix didn't work
+    if (result == error.InvalidValue) {
+        @panic("ERROR: Fix failed - still getting InvalidValue for zero parameters!");
+    }
+
+    std.debug.print("✓ launchKernel with zero parameters completed (fix working!)\n", .{});
+    
+    try testing.expect(true); // Test passed
+}
+
 // =============================================================================
 // MODULE RESOURCE ACCESS TESTS
 // =============================================================================

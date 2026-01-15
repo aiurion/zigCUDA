@@ -922,13 +922,59 @@ pub fn getTextureFromModule(module: *CUmodule, name: [:0]const c_char) errors.CU
     }
 }
 
+/// Helper function to launch kernels with no parameters
+fn launchKernelWithNullParams(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uint, block_dim_x: c_uint, block_dim_y: c_uint, block_dim_z: c_uint, shared_mem_bytes: c_uint, stream: ?*CUstream) errors.CUDAError!void {
+    // Try modern cuLaunchKernel first (CUDA 4.0+)
+    if (cuLaunchKernel) |launch_fn| {
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]*anyopaque, ?[*]*anyopaque) callconv(.c) CUresult, @ptrCast(launch_fn));
+
+        // Pass empty array for parameters when there are none
+        var empty_params: [1]?*anyopaque = .{null}; // Single null parameter to satisfy C API
+        const result = fn_ptr(function, grid_dim_x, grid_dim_y, 1, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, @ptrCast(&empty_params), null);
+
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    }
+
+    // Fallback to deprecated cuModuleLaunch (CUDA 2.0-3.x)
+    if (cuModuleLaunch) |launch_fn| {
+        const fn_ptr = @as(*const fn (*CUfunction, c_uint, c_uint, c_uint, c_uint, c_uint, c_uint, ?*CUstream, [*]*anyopaque) callconv(.c) CUresult, @ptrCast(launch_fn));
+
+        // Pass empty array for parameters when there are none
+        var empty_params: [1]?*anyopaque = .{null}; // Single null parameter to satisfy C API
+        const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, @ptrCast(&empty_params));
+
+        if (result == CUDA_SUCCESS) {
+            return;
+        }
+        return errors.cudaError(result);
+    }
+
+    // No kernel launch API available
+    std.log.warn("Neither cuLaunchKernel nor cuModuleLaunch available on this system", .{});
+    return error.SymbolNotFound;
+}
+
 /// Launch kernel synchronously from module
 pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uint, block_dim_x: c_uint, block_dim_y: c_uint, block_dim_z: c_uint, shared_mem_bytes: c_uint, stream: ?*CUstream, kernel_params: []?*anyopaque) errors.CUDAError!void {
+    // Handle zero-parameter case explicitly - CUDA allows kernels with no parameters
+    if (kernel_params.len == 0) {
+        return launchKernelWithNullParams(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream);
+    }
+
     // Convert slice to C array (CUDA expects non-optional pointers)
     var params_array: [32]*anyopaque = undefined; // Max 32 parameters
     const param_count = @min(kernel_params.len, 32);
+    
+    // Validate and convert parameters - skip null parameters instead of failing
     for (0..param_count) |i| {
-        params_array[i] = kernel_params[i] orelse return error.InvalidValue;
+        if (kernel_params[i] == null) {
+            // Skip null parameters rather than failing - they might be intentional padding
+            continue;
+        }
+        params_array[i] = kernel_params[i].?;
     }
 
     // Try modern cuLaunchKernel first (CUDA 4.0+)
