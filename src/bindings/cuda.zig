@@ -184,11 +184,20 @@ pub var cuGetErrorString: ?*const fn (result: CUresult, pstr: *[*:0]const c_char
 // Memory - Note: CUdeviceptr is passed by value (it's a c_ulonglong)
 pub var cuMemAllocHost: ?*const fn (pHost: *?*anyopaque, bytesize: c_size_t) callconv(.c) CUresult = null;
 pub var cuMemFreeHost: ?*const fn (pHost: *anyopaque) callconv(.c) CUresult = null;
+// v2 variants for modern CUDA
+pub var cuMemAlloc_v2: ?*const fn (pdDev: *CUdeviceptr, bytesize: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemFree_v2: ?*const fn (dptr: CUdeviceptr) callconv(.c) CUresult = null;
+// base v1 versions
 pub var cuMemAlloc: ?*const fn (pdDev: *CUdeviceptr, bytesize: c_size_t) callconv(.c) CUresult = null;
 pub var cuMemFree: ?*const fn (dptr: CUdeviceptr) callconv(.c) CUresult = null;
 pub var cuMemcpyHtoD: ?*const fn (dstDevice: CUdeviceptr, srcHost: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
 pub var cuMemcpyDtoH: ?*const fn (dstHost: *anyopaque, srcDevice: CUdeviceptr, ByteCount: c_size_t) callconv(.c) CUresult = null;
 pub var cuMemcpyDtoD: ?*const fn (dstDevice: CUdeviceptr, srcDevice: CUdeviceptr, ByteCount: c_size_t) callconv(.c) CUresult = null;
+
+// Memory copy operations v2 (required for primary context on CUDA 13+)
+pub var cuMemcpyHtoD_v2: ?*const fn (dstDevice: CUdeviceptr, srcHost: *const anyopaque, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoH_v2: ?*const fn (dstHost: *anyopaque, srcDevice: CUdeviceptr, ByteCount: c_size_t) callconv(.c) CUresult = null;
+pub var cuMemcpyDtoD_v2: ?*const fn (dstDevice: CUdeviceptr, srcDevice: CUdeviceptr, ByteCount: c_size_t) callconv(.c) CUresult = null;
 
 // Async memory operations
 pub var cuMemcpyHtoDAsync: ?*const fn (dstDevice: CUdeviceptr, srcHost: *const anyopaque, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
@@ -196,6 +205,7 @@ pub var cuMemcpyDtoHAsync: ?*const fn (dstHost: *anyopaque, srcDevice: CUdevicep
 pub var cuMemcpyDtoDAsync: ?*const fn (dstDevice: CUdeviceptr, srcDevice: CUdeviceptr, ByteCount: c_size_t, stream: ?*CUstream) callconv(.c) CUresult = null;
 
 // Memory information and handle operations
+pub var cuMemGetInfo_v2: ?*const fn (free_bytes: *c_ulonglong, total_bytes: *c_ulonglong) callconv(.c) CUresult = null;
 pub var cuMemGetInfo: ?*const fn (free_bytes: *c_ulonglong, total_bytes: *c_ulonglong) callconv(.c) CUresult = null;
 pub var cuMemGetHandle: ?*const fn (handle: ?*anyopaque, flags: c_uint, dev_ptr: *const anyopaque, size: c_size_t) callconv(.c) CUresult = null;
 
@@ -215,6 +225,7 @@ pub var cuCtxSynchronize: ?*const fn () callconv(.c) CUresult = null;
 pub var cuDevicePrimaryCtxRetain: ?*const fn (pctx: *?*CUcontext, device: CUdevice) callconv(.c) CUresult = null;
 pub var cuDevicePrimaryCtxRelease: ?*const fn (device: CUdevice) callconv(.c) CUresult = null;
 pub var cuDevicePrimaryCtxSetFlags: ?*const fn (device: CUdevice, flags: c_uint) callconv(.c) CUresult = null;
+pub var cuDevicePrimaryCtxReset: ?*const fn (device: CUdevice) callconv(.c) CUresult = null;
 pub var cuModuleGetFunction: ?*const fn (pfunc: *?*CUfunction, module: *CUmodule, name: [*:0]const c_char) callconv(.c) CUresult = null;
 
 // Additional Module & Kernel Management Functions
@@ -307,37 +318,90 @@ pub fn load() !void {
     cuGetErrorName = dlsym_lookup(@TypeOf(cuGetErrorName.?), "cuGetErrorName") orelse return error.SymbolNotFound;
     cuGetErrorString = dlsym_lookup(@TypeOf(cuGetErrorString.?), "cuGetErrorString") orelse return error.SymbolNotFound;
 
-    // Memory functions - try versioned names
-    cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost") orelse
-        dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2") orelse return error.SymbolNotFound;
-    cuMemFreeHost = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost") orelse return error.SymbolNotFound;
-
-    cuMemAlloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc") orelse
-        dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc_v2");
-    if (cuMemAlloc == null) {
-        std.debug.print("ERROR: cuMemAlloc not found\n", .{});
-        return error.SymbolNotFound;
+    // Memory functions - prefer _v2 for modern CUDA, fall back to v1
+    cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost");
+    if (cuMemAllocHost == null) {
+        cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2");
     }
-    if (isDebugEnabled()) {
+    if (cuMemAllocHost == null) return error.SymbolNotFound;
+
+    const mem_free_host = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost");
+    if (mem_free_host != null) {
+        cuMemFreeHost = mem_free_host;
+    } else {
+        // Fall back to v2
+        cuMemFreeHost = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost_v2");
+    }
+    if (cuMemFreeHost == null and isDebugEnabled()) {
+        std.debug.print("WARNING: cuMemFreeHost not found\n", .{});
+    }
+
+    // Device memory - prefer _v2 when available
+    const mem_alloc_v2 = dlsym_lookup(@TypeOf(cuMemAlloc_v2.?), "cuMemAlloc_v2");
+    if (mem_alloc_v2 != null) {
+        cuMemAlloc_v2 = mem_alloc_v2;
+        // Point both variables to v2 for code that uses either
+        const base_alloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc");
+        cuMemAlloc = if (base_alloc != null) base_alloc else cuMemAlloc_v2;
+    } else {
+        // No v2 available, use v1
+        std.debug.print("INFO: Using v1 for cuMemAlloc (v2 not available)\n", .{});
+        const base_alloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc");
+        if (base_alloc != null) {
+            cuMemAlloc = base_alloc;
+        } else {
+            return error.SymbolNotFound;
+        }
+    }
+
+    // Device memory free - prefer _v2 when available
+    const mem_free_v2 = dlsym_lookup(@TypeOf(cuMemFree_v2.?), "cuMemFree_v2");
+    if (mem_free_v2 != null) {
+        cuMemFree_v2 = mem_free_v2;
+        // Point both variables to v2 for code that uses either
+        const base_free = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree");
+        cuMemFree = if (base_free != null) base_free else cuMemFree_v2;
+    } else {
+        // No v2 available, use v1
+        std.debug.print("INFO: Using v1 for cuMemFree (v2 not available)\n", .{});
+        const base_free = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree");
+        if (base_free != null) {
+            cuMemFree = base_free;
+        }
+    }
+
+    if (isDebugEnabled() and cuMemAlloc != null) {
         std.debug.print("DEBUG: Found cuMemAlloc symbol at {x}\n", .{@intFromPtr(cuMemAlloc.?)});
     }
 
-    cuMemFree = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree") orelse
-        dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree_v2");
-    if (cuMemFree == null) {
-        std.debug.print("ERROR: cuMemFree not found\n", .{});
-        return error.SymbolNotFound;
-    }
-    if (isDebugEnabled()) {
+    if (isDebugEnabled() and cuMemFree != null) {
         std.debug.print("DEBUG: Found cuMemFree symbol at {x}\n", .{@intFromPtr(cuMemFree.?)});
     }
 
-    cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse
-        dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD_v2") orelse return error.SymbolNotFound;
-    cuMemcpyDtoH = dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse
-        dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH_v2") orelse return error.SymbolNotFound;
-    cuMemcpyDtoD = dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse
-        dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD_v2") orelse return error.SymbolNotFound;
+    // Memory copy operations (prefer v2 for primary context compatibility on CUDA 13+)
+    const memcpy_htod_v2 = dlsym_lookup(@TypeOf(cuMemcpyHtoD_v2.?), "cuMemcpyHtoD_v2");
+    if (memcpy_htod_v2 != null) {
+        cuMemcpyHtoD_v2 = memcpy_htod_v2;
+        cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse cuMemcpyHtoD_v2;
+    } else {
+        cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse return error.SymbolNotFound;
+    }
+
+    const memcpy_dtoh_v2 = dlsym_lookup(@TypeOf(cuMemcpyDtoH_v2.?), "cuMemcpyDtoH_v2");
+    if (memcpy_dtoh_v2 != null) {
+        cuMemcpyDtoH_v2 = memcpy_dtoh_v2;
+        cuMemcpyDtoH = dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse cuMemcpyDtoH_v2;
+    } else {
+        cuMemcpyDtoH = dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse return error.SymbolNotFound;
+    }
+
+    const memcpy_dtod_v2 = dlsym_lookup(@TypeOf(cuMemcpyDtoD_v2.?), "cuMemcpyDtoD_v2");
+    if (memcpy_dtod_v2 != null) {
+        cuMemcpyDtoD_v2 = memcpy_dtod_v2;
+        cuMemcpyDtoD = dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse cuMemcpyDtoD_v2;
+    } else {
+        cuMemcpyDtoD = dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse return error.SymbolNotFound;
+    }
 
     // Optional helper lookups
     cuDeviceComputeCapability = dlsym_lookup(@TypeOf(cuDeviceComputeCapability.?), "cuDeviceComputeCapability");
@@ -351,8 +415,20 @@ pub fn load() !void {
     cuMemcpyDtoHAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync");
     cuMemcpyDtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync");
 
-    // Memory information and handle operations
-    cuMemGetInfo = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
+    // Memory information and handle operations - prefer _v2 for modern CUDA
+    const mem_info_v2 = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo_v2");
+    if (mem_info_v2 != null) {
+        cuMemGetInfo_v2 = mem_info_v2;
+        // Also try base symbol, prefer v2 but use base if available
+        const base_info = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
+        cuMemGetInfo = if (base_info != null) base_info else mem_info_v2;
+    } else {
+        // No v2 available, use base symbol
+        std.debug.print("INFO: Using v1 for cuMemGetInfo (v2 not available)\n", .{});
+        cuMemGetInfo = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
+    }
+
+    // Handle variant - prefer v1, fallback to v2
     cuMemGetHandle = dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v1") orelse
         dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v2");
 
@@ -369,6 +445,7 @@ pub fn load() !void {
     cuDevicePrimaryCtxRetain = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxRetain.?), "cuDevicePrimaryCtxRetain") orelse return error.SymbolNotFound;
     cuDevicePrimaryCtxRelease = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxRelease.?), "cuDevicePrimaryCtxRelease") orelse return error.SymbolNotFound;
     cuDevicePrimaryCtxSetFlags = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxSetFlags.?), "cuDevicePrimaryCtxSetFlags") orelse return error.SymbolNotFound;
+    cuDevicePrimaryCtxReset = dlsym_lookup(@TypeOf(cuDevicePrimaryCtxReset.?), "cuDevicePrimaryCtxReset") orelse return error.SymbolNotFound;
 
     // Modules (required)
     cuModuleLoad = dlsym_lookup(@TypeOf(cuModuleLoad.?), "cuModuleLoad") orelse return error.SymbolNotFound;

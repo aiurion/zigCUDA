@@ -62,6 +62,12 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
 
+    // Create v2 memory bindings test module (_v2 API specifically for CUDA 13+ / Blackwell)
+    const v2_memory_test_module = b.createModule(.{
+        .root_source_file = b.path("test/v2_memory_bindings_test.zig"),
+        .target = target,
+    });
+
     // Create core runtime test module (high-level abstraction integration testing)
     const runtime_test_module = b.createModule(.{
         .root_source_file = b.path("test/core_runtime_test.zig"),
@@ -104,6 +110,7 @@ pub fn build(b: *std.Build) !void {
 
     // Add cuda to all test modules
     bindings_test_module.addImport("cuda", cuda_module);
+    v2_memory_test_module.addImport("cuda", cuda_module);
     runtime_test_module.addImport("cuda", cuda_module);
     kernel_integration_test_module.addImport("cuda", cuda_module);
     core_module.addImport("cuda", cuda_module);
@@ -115,6 +122,11 @@ pub fn build(b: *std.Build) !void {
     // Create bindings test executable (low-level API tests)
     const binding_tests = b.addTest(.{
         .root_module = bindings_test_module,
+    });
+
+    // Create v2 memory test executable (_v2 API tests for CUDA 13+ / Blackwell)
+    const v2_memory_tests = b.addTest(.{
+        .root_module = v2_memory_test_module,
     });
 
     // Create runtime test executable (high-level integration tests)
@@ -130,6 +142,7 @@ pub fn build(b: *std.Build) !void {
     // Link all test executables against system libc
     lib_tests.linkLibC();
     binding_tests.linkLibC();
+    v2_memory_tests.linkLibC();
     runtime_tests.linkLibC();
     kernel_integration_tests.linkLibC();
 
@@ -146,6 +159,12 @@ pub fn build(b: *std.Build) !void {
         "/lib64/ld-linux-x86-64.so.2",
     });
     run_bindings_tests.addArtifactArg(binding_tests);
+
+    // Use system dynamic linker for v2 memory tests
+    const run_v2_memory_tests = b.addSystemCommand(&.{
+        "/lib64/ld-linux-x86-64.so.2",
+    });
+    run_v2_memory_tests.addArtifactArg(v2_memory_tests);
 
     // Use system dynamic linker for runtime tests too
     const run_runtime_tests = b.addSystemCommand(&.{
@@ -166,6 +185,10 @@ pub fn build(b: *std.Build) !void {
 
     const bindings_test_step = b.step("test-bindings", "Run comprehensive CUDA API binding tests");
     bindings_test_step.dependOn(&run_bindings_tests.step);
+
+    // Add v2 memory test step
+    const v2_memory_test_step = b.step("test-v2-memory", "Run _v2 memory API tests for CUDA 13+ / Blackwell");
+    v2_memory_test_step.dependOn(&run_v2_memory_tests.step);
 
     const runtime_test_step = b.step("test-runtime", "Run core abstraction and integration tests");
     runtime_test_step.dependOn(&run_runtime_tests.step);
@@ -300,8 +323,9 @@ pub fn build(b: *std.Build) !void {
 
     // COMBINED TEST STEP - RUNS ALL TESTS
 
-    const all_tests_step = b.step("test", "Run all tests (bindings + runtime + kernel integration + simple + cuBLAS integration)");
+    const all_tests_step = b.step("test", "Run all tests (bindings + v2-memory + runtime + kernel integration + simple + cuBLAS integration)");
     all_tests_step.dependOn(bindings_test_step);
+    all_tests_step.dependOn(v2_memory_test_step);
     all_tests_step.dependOn(runtime_test_step);
     all_tests_step.dependOn(kernel_integration_test_step);
     all_tests_step.dependOn(simple_integration_test_step);
