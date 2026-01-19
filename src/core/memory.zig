@@ -6,6 +6,57 @@ const std = @import("std");
 const bindings = @import("../bindings/cuda.zig");
 const errors = @import("../bindings/errors.zig");
 
+// ============================================================================
+// WRAPPER FUNCTIONS FOR MODERN CUDA (CUDA 13+ / Blackwell)
+// These wrappers use _v2 APIs exclusively - no v1 fallback
+// ============================================================================
+
+/// Allocate device memory using _v2 API (required for CUDA 13+)
+pub fn alloc(size: usize) errors.CUDAError!bindings.CUdeviceptr {
+    var ptr: bindings.CUdeviceptr = undefined;
+
+    // Use _v2 only - modern CUDA requires v2 APIs
+    if (bindings.cuMemAlloc_v2 == null) {
+        return error.SymbolNotFound;
+    }
+    const result = bindings.cuMemAlloc_v2.?(&ptr, size);
+
+    if (result == bindings.CUDA_SUCCESS) return ptr;
+    return errors.cudaError(result);
+}
+
+/// Free device memory using _v2 API
+pub fn free(ptr: bindings.CUdeviceptr) errors.CUDAError!void {
+    // Use _v2 only - modern CUDA requires v2 APIs
+    if (bindings.cuMemFree_v2 == null) {
+        return error.SymbolNotFound;
+    }
+    const result = bindings.cuMemFree_v2.?(ptr);
+
+    if (result == bindings.CUDA_SUCCESS) return;
+    return errors.cudaError(result);
+}
+
+/// Get memory information using _v2 API
+pub fn getMemoryInfo() errors.CUDAError!struct { free: usize, total: usize } {
+    var free_bytes: c_ulonglong = undefined;
+    var total_bytes: c_ulonglong = undefined;
+
+    // Use _v2 only - modern CUDA requires v2 APIs
+    if (bindings.cuMemGetInfo_v2 == null) {
+        return error.SymbolNotFound;
+    }
+    const result = bindings.cuMemGetInfo_v2.?(&free_bytes, &total_bytes);
+
+    if (result == bindings.CUDA_SUCCESS) {
+        return .{ .free = @as(usize, @intCast(free_bytes)), .total = @as(usize, @intCast(total_bytes)) };
+    }
+    return errors.cudaError(result);
+}
+
+// Type aliases for C types used above
+const c_ulonglong = u64;
+
 /// Type-safe device pointer that prevents mixing CPU/GPU memory at compile time
 pub fn DevicePtr(comptime T: type) type {
     return struct {
@@ -83,12 +134,13 @@ pub const MemoryPool = struct {
     }
 
     pub fn deinit(self: *MemoryPool) void {
-        // Clean up all allocations
+        // Clean up all allocations using the preferred wrapper (tries _v2 first)
         var it = self.allocations.iterator();
         while (it.next()) |entry| {
-            if (bindings.cuMemFree) |cuMemFreeFn| {
-                _ = cuMemFreeFn(@ptrFromInt(entry.key_ptr.*));
-            }
+            const cuda_ptr = @as(bindings.CUdeviceptr, @intCast(entry.key_ptr.*));
+            free(cuda_ptr) catch |err| {
+                std.log.err("Failed to free memory during deinit: {}", .{err});
+            };
         }
         self.allocations.deinit();
     }
@@ -100,16 +152,9 @@ pub const MemoryPool = struct {
         // Ensure CUDA is initialized
         try bindings.init(0);
 
-        // Allocate memory using CUDA API
-        var cuda_ptr: ?*anyopaque = null;
-        if (bindings.cuMemAlloc == null) {
-            return errors.CUDAError.Uninitialized;
-        }
-        const result = bindings.cuMemAlloc.?(&cuda_ptr, byte_size);
-
-        if (result != bindings.CUDA_SUCCESS) {
-            return errors.cudaError(result);
-        }
+        // Allocate memory using the preferred wrapper (tries _v2 first)
+        const cuda_ptr_raw = try alloc(byte_size);
+        const cuda_ptr: ?*anyopaque = @ptrFromInt(cuda_ptr_raw);
 
         // Track the allocation for cleanup and stats
         const info = AllocationInfo{
@@ -118,7 +163,7 @@ pub const MemoryPool = struct {
             .timestamp = std.time.microTimestamp(),
         };
 
-        try self.allocations.put(@intFromPtr(cuda_ptr.?), info);
+        try self.allocations.put(@intFromPtr(cuda_ptr), info);
 
         // Update statistics
         self.total_allocated += byte_size;
@@ -126,7 +171,7 @@ pub const MemoryPool = struct {
             self.peak_usage = self.total_allocated;
         }
 
-        return DevicePtr(T).init(cuda_ptr.?, count);
+        return DevicePtr(T).init(cuda_ptr, count);
     }
 
     /// Free device memory and update tracking
@@ -136,8 +181,10 @@ pub const MemoryPool = struct {
         if (self.allocations.remove(self.allocator, cuda_ptr)) |entry| {
             self.total_allocated -= entry.value.size;
 
-            // Free using CUDA API
-            _ = bindings.cuMemFree(@ptrFromInt(cuda_ptr));
+            // Free using the preferred wrapper (tries _v2 first)
+            free(@as(bindings.CUdeviceptr, @intCast(cuda_ptr))) catch |err| {
+                std.log.err("Failed to free memory: {}", .{err});
+            };
         } else {
             // Warning: trying to free untracked memory
             std.log.warn("Attempting to free untracked device memory", .{});
@@ -197,29 +244,22 @@ pub const DeviceMemory = struct {
 
         const byte_size = @sizeOf(T) * count;
 
-        // Allocate memory using CUDA API
-        var cuda_ptr: ?*anyopaque = null;
-        if (bindings.cuMemAlloc == null) {
-            return errors.CUDAError.Uninitialized;
-        }
-        const result = bindings.cuMemAlloc.?(&cuda_ptr, byte_size);
-
-        if (result != bindings.CUDA_SUCCESS) {
-            return errors.cudaError(result);
-        }
+        // Allocate memory using the preferred wrapper (tries _v2 first)
+        const cuda_ptr_raw = try alloc(byte_size);
 
         return DeviceMemory{
-            .ptr = cuda_ptr.?,
+            .ptr = @ptrFromInt(cuda_ptr_raw),
             .size = byte_size,
             .device_index = device_index,
         };
     }
 
     pub fn deinit(self: *DeviceMemory) void {
-        if (@intFromPtr(self.ptr) != 0) {
-            _ = bindings.cuMemFree(@ptrFromInt(@intFromPtr(self.ptr)));
-            // self.ptr is not optional in struct, so we can't set it to null easily without changing type
-            // but we can just set it to something safe or handle it.
+        const addr = @intFromPtr(self.ptr);
+        if (addr != 0) {
+            free(@as(bindings.CUdeviceptr, @intCast(addr))) catch |err| {
+                std.log.err("Failed to free DeviceMemory: {}", .{err});
+            };
         }
     }
 
