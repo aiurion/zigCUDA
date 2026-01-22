@@ -7,8 +7,10 @@
 Pure Zig (0.15.2+) bindings to the NVIDIA CUDA Driver API
 
 Dynamic loading of libcuda.so, clean high-level wrappers, and graceful stubs for non-CUDA environments.
+
 No static linking, no CUDA toolkit required at runtime.
-Tested on Blackwell (sm_120) — ready for low-level GPU programming, kernel launching, and basic BLAS in Zig.
+
+> Tested on Blackwell (sm_120) — ready for low-level GPU programming, kernel launching, and basic BLAS in Zig.
 
 ## 🚀 Try It Now
 
