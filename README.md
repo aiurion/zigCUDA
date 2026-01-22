@@ -132,20 +132,7 @@ pub fn main() !void {
 }
 ```
 
-
-## 🏗️ Project Structure
-
-```
-src/
-├── bindings/     # Raw FFI + dynamic loading (cuda.zig is core)
-├── core/         # High-level wrappers (context, device, memory, stream, kernel)
-├── integrations/ # cuBLAS, FlashAttention prototype, etc.
-├── ops/          # Future tensor operations (currently stubs)
-├── examples/     # Demo programs
-└── lib.zig       # Public root (re-exports API)
-```
-
-## 🎯 What This Is vs Isn't
+## Scope
 
 **This IS:**
 - A solid CUDA Driver API wrapper for Zig
@@ -155,7 +142,7 @@ src/
 **This is NOT:**
 - A full ML framework
 - Complete high-level tensor ops
-- Optimized inference engine (FlashAttention is prototype only)
+- Optimized inference engine
 
 ## 🗺️ Roadmap
 
@@ -174,10 +161,7 @@ zig build run       # Diagnostic tool
 
 ## 🤝 Contributing
 
-Open issues for bugs/features. PRs welcome if:
-- Tests pass
-- Core remains dependency-free
-- Changes target low-level first
+Open issues for bugs/features. 
 
 ## 📜 License
 
