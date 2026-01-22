@@ -1,6 +1,6 @@
 # zigCUDA - CUDA Driver API for Zig
 
-Pure-Zig bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean low level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime. Tested on NVIDIA Blackwell (sm_120).
+Pure Zig (0.15.2+) bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean low level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime. Tested on NVIDIA Blackwell (sm_120).
 
 [![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
 [![Tests: 95/97 Passing](https://img.shields.io/badge/Tests-95%2F97_Passing-brightgreen)](#)
