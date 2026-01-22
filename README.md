@@ -1,12 +1,12 @@
 # zigCUDA - CUDA Driver API for Zig
 
-Pure-Zig bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean high-level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime. Tested on NVIDIA Blackwell (sm_120).
+Pure-Zig bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean low level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime. Tested on NVIDIA Blackwell (sm_120).
 
 [![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
 [![Tests: 95/97 Passing](https://img.shields.io/badge/Tests-95%2F97_Passing-brightgreen)](#)
 [![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
-> Core driver wrapper is stable and well-tested. Ready for low-level GPU programming, kernel launching, and basic BLAS operations.
+> Core driver wrapper is tested. Ready for low-level GPU programming, kernel launching, and basic BLAS operations.
 
 ## 🚀 Try It Now
 
@@ -47,7 +47,6 @@ INFO: cuInit succeeded
 | Core API (memory, streams, contexts) | Complete           | Full wrappers, async support       |
 | Kernel Launch          | Complete                | cuLaunchKernel + legacy fallback           |
 | cuBLAS Integration     | Partial                 | Basic handle + common ops working           |
-| FlashAttention Prototype | Early                 | Hardware detection + cuBLAS fallback       |
 
 
 ## 🛠️ Using in Your Project
@@ -158,9 +157,7 @@ src/
 
 ## 🗺️ Roadmap
 
-- **v0.0.x** – Core polish, more tests, Windows support
-- **v0.1.0** – Stable API, basic tensor abstraction, expanded cuBLAS/cuRAND
-- **Later** – Optimized kernels (full FlashAttention, Marlin), model loading, inference primitives
+- **v0.0.x** – Core polish and further validation
 
 ## 🛠️ Development
 
