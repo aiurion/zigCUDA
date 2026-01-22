@@ -4,7 +4,7 @@
 
 # zigCUDA - CUDA Driver API for Zig
 
-Pure Zig (0.15.2+) bindings to the NVIDIA CUDA Driver API
+Blackwell ready, pure Zig (0.15.2+) bindings to the NVIDIA CUDA Driver API
 
 Dynamic loading of libcuda.so, clean high-level wrappers, and graceful stubs for non-CUDA environments.
 
