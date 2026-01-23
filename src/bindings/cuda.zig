@@ -150,6 +150,21 @@ pub const CU_FUNC_ATTRIBUTE_CACHE_MODE_CA = 7;
 pub const CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8;
 pub const CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT = 9;
 
+// Device attributes
+pub const CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1;
+pub const CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2;
+pub const CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3;
+pub const CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z = 4;
+pub const CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X = 5;
+pub const CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y = 6;
+pub const CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z = 7;
+pub const CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK = 8;
+pub const CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY = 9;
+pub const CU_DEVICE_ATTRIBUTE_WARP_SIZE = 10;
+pub const CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16;
+pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75;
+pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76;
+
 // Cache configuration
 pub const CU_FUNC_CACHE_PREFER_NONE = 0x00;
 pub const CU_FUNC_CACHE_PREFER_SHARED = 0x01;
@@ -918,7 +933,7 @@ pub fn popContext() errors.CUDAError!*CUcontext {
 /// Load a CUDA module from file (.cubin/.ptx)
 pub fn loadModule(filename: [:0]const c_char) errors.CUDAError!*CUmodule {
     var module_handle: ?*CUmodule = null;
-    
+
     // Check if function is loaded
     const cu_module_load = cuModuleLoad orelse return error.SymbolNotFound;
     const result = cu_module_load(&module_handle, filename);
@@ -931,7 +946,7 @@ pub fn loadModule(filename: [:0]const c_char) errors.CUDAError!*CUmodule {
 /// Load a CUDA module from memory
 pub fn loadModuleFromData(image: [:0]const c_char) errors.CUDAError!*CUmodule {
     var module_handle: ?*CUmodule = null;
-    
+
     // Check if function is loaded
     const cu_module_load_data = cuModuleLoadData orelse return error.SymbolNotFound;
     const result = cu_module_load_data(&module_handle, image);
@@ -953,7 +968,7 @@ pub fn unloadModule(module: *CUmodule) errors.CUDAError!void {
 /// Get function handle from module
 pub fn getFunctionFromModule(module: *CUmodule, name: [:0]const c_char) errors.CUDAError!*CUfunction {
     var func_handle: ?*CUfunction = null;
-    
+
     // Check if function is loaded
     const cu_module_get_function = cuModuleGetFunction orelse return error.SymbolNotFound;
     const result = cu_module_get_function(&func_handle, module, name);
@@ -1008,15 +1023,13 @@ pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uin
         // Handle zero parameters by passing empty array
         if (kernel_params.len == 0) {
             var empty_array: [1]?*anyopaque = .{null};
-            
-            std.debug.print("DEBUG: Launching with zero params - grid=({},{},{}) block=({},{},{})\n", .{
-                grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y, block_dim_z
-            });
-            
+
+            std.debug.print("DEBUG: Launching with zero params - grid=({},{},{}) block=({},{},{})\n", .{ grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y, block_dim_z });
+
             const result = fn_ptr(function, grid_dim_x, grid_dim_y, grid_dim_z, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, @as([*]*anyopaque, @ptrCast(&empty_array)), null);
-            
+
             std.debug.print("DEBUG: cuLaunchKernel returned result={any}\n", .{result});
-            
+
             if (result == CUDA_SUCCESS) {
                 return;
             }
@@ -1026,7 +1039,7 @@ pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uin
         // Handle non-zero parameters
         var params_array: [32]*anyopaque = undefined;
         const param_count = @min(kernel_params.len, 32);
-        
+
         for (0..param_count) |i| {
             if (kernel_params[i] != null) {
                 params_array[i] = kernel_params[i].?;
@@ -1049,7 +1062,7 @@ pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uin
         if (kernel_params.len == 0) {
             var empty_array: [1]?*anyopaque = .{null};
             const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, @as([*]*anyopaque, @ptrCast(&empty_array)));
-            
+
             if (result == CUDA_SUCCESS) {
                 return;
             }
@@ -1059,7 +1072,7 @@ pub fn launchKernel(function: *CUfunction, grid_dim_x: c_uint, grid_dim_y: c_uin
         // Handle non-zero parameters
         var params_array: [32]*anyopaque = undefined;
         const param_count = @min(kernel_params.len, 32);
-        
+
         for (0..param_count) |i| {
             if (kernel_params[i] != null) {
                 params_array[i] = kernel_params[i].?;
@@ -1087,7 +1100,7 @@ pub fn launchCooperativeKernel(function: *CUfunction, grid_dim_x: c_uint, grid_d
         if (kernel_params.len == 0) {
             var empty_array: [1]?*anyopaque = .{null};
             const result = fn_ptr(function, grid_dim_x, grid_dim_y, block_dim_x, block_dim_y, block_dim_z, shared_mem_bytes, stream, @as([*]*anyopaque, @ptrCast(&empty_array)));
-            
+
             if (result == CUDA_SUCCESS) {
                 return;
             }
@@ -1097,7 +1110,7 @@ pub fn launchCooperativeKernel(function: *CUfunction, grid_dim_x: c_uint, grid_d
         // Handle non-zero parameters
         var params_array: [32]*anyopaque = undefined;
         const param_count = @min(kernel_params.len, 32);
-        
+
         for (0..param_count) |i| {
             if (kernel_params[i] != null) {
                 params_array[i] = kernel_params[i].?;
