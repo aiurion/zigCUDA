@@ -158,10 +158,19 @@ pub const Device = struct {
         } else if (bindings.cuDeviceGetAttribute) |f| {
             var c_major: i32 = 0;
             var c_minor: i32 = 0;
-            _ = f(&c_major, 75, device_handle); // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR
-            _ = f(&c_minor, 76, device_handle); // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR
+            _ = f(&c_major, bindings.CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device_handle);
+            _ = f(&c_minor, bindings.CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device_handle);
             major = @intCast(c_major);
             minor = @intCast(c_minor);
+        }
+
+        // Get SM count
+        var multiprocessor_count: u32 = 1;
+        if (bindings.cuDeviceGetAttribute) |f| {
+            var c_sm_count: i32 = 0;
+            if (f(&c_sm_count, bindings.CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, device_handle) == bindings.CUDA_SUCCESS) {
+                multiprocessor_count = @intCast(c_sm_count);
+            }
         }
 
         // Get legacy properties structure for additional info
@@ -191,7 +200,7 @@ pub const Device = struct {
                 @intCast(dev_prop.warpSize)
             else
                 32,
-            .multiprocessor_count = 1, // CUdevprop doesn't contain multiprocessor count info
+            .multiprocessor_count = multiprocessor_count,
             .compute_capability = .{
                 .major = major,
                 .minor = minor,

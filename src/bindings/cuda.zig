@@ -150,6 +150,21 @@ pub const CU_FUNC_ATTRIBUTE_CACHE_MODE_CA = 7;
 pub const CU_FUNC_ATTRIBUTE_MAX_DYNAMIC_SHARED_SIZE_BYTES = 8;
 pub const CU_FUNC_ATTRIBUTE_PREFERRED_SHARED_MEMORY_CARVEOUT = 9;
 
+// Device attributes
+pub const CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK = 1;
+pub const CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_X = 2;
+pub const CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Y = 3;
+pub const CU_DEVICE_ATTRIBUTE_MAX_BLOCK_DIM_Z = 4;
+pub const CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_X = 5;
+pub const CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Y = 6;
+pub const CU_DEVICE_ATTRIBUTE_MAX_GRID_DIM_Z = 7;
+pub const CU_DEVICE_ATTRIBUTE_MAX_SHARED_MEMORY_PER_BLOCK = 8;
+pub const CU_DEVICE_ATTRIBUTE_TOTAL_CONSTANT_MEMORY = 9;
+pub const CU_DEVICE_ATTRIBUTE_WARP_SIZE = 10;
+pub const CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT = 16;
+pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75;
+pub const CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76;
+
 // Cache configuration
 pub const CU_FUNC_CACHE_PREFER_NONE = 0x00;
 pub const CU_FUNC_CACHE_PREFER_SHARED = 0x01;
@@ -773,8 +788,8 @@ pub fn getComputeCapability(device: CUdevice) errors.CUDAError!struct { major: c
         major = 0;
         minor = 0;
         if (cuDeviceGetAttribute) |f| {
-            _ = f(&major, 75, device); // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR = 75
-            _ = f(&minor, 76, device); // CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR = 76
+            _ = f(&major, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MAJOR, device);
+            _ = f(&minor, CU_DEVICE_ATTRIBUTE_COMPUTE_CAPABILITY_MINOR, device);
         }
         return .{ .major = major, .minor = minor };
     }

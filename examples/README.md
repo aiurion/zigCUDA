@@ -66,6 +66,20 @@ zig build-exe examples/04_streams.zig --dep zigcuda --mod zigcuda::src/lib.zig
 ./04_streams
 ```
 
+### 05_cubin_launch.zig
+**Production-ready kernel launching from binary files**
+
+Demonstrates:
+- Loading pre-compiled .cubin files
+- Handling binary modules in production environments
+- Grid and block configuration for high performance
+- Memory management for kernel arguments
+
+```bash
+zig build-exe examples/05_cubin_launch.zig --dep zigcuda --mod zigcuda::src/lib.zig
+./05_cubin_launch
+```
+
 ## Building All Examples
 
 You can add these examples to your `build.zig` to make them easy to build:
@@ -101,6 +115,7 @@ zig build
 The `kernels/` subdirectory contains PTX (Parallel Thread Execution) code for CUDA kernels:
 
 - **vector_add.ptx**: Vector addition kernel used by example 03
+- **vector_add.cubin**: Compiled vector addition kernel used by example 05
 
 ### Compiling Your Own Kernels
 
@@ -180,6 +195,28 @@ Querying stream status...
 
 ✓ SUCCESS: Streams example completed
 Total data transferred: 6 KB across 3 streams
+```
+
+### Example 05 - CUBIN Launch
+```
+=== CUDA Kernel Launch Example (CUBIN) ===
+
+✓ Memory allocated and initialized
+✓ CUBIN module loaded from file
+✓ Kernel function extracted
+
+Launching kernel with 4 blocks x 256 threads
+✓ Kernel launched
+
+✓ SUCCESS: Vector addition completed correctly
+Verified: C[i] = A[i] + B[i] for all 1024 elements
+
+=== Production Workflow ===
+Step 1: Compile .cu → .cubin:
+nvcc -arch=compute_80 --gpu-code=sm_90a --cubin vector_add.cu
+
+Step 2: Load .cubin at runtime with cuModuleLoad()
+This is the production-ready approach!
 ```
 
 ## Troubleshooting

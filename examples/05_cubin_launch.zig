@@ -1,25 +1,28 @@
-// examples/03_kernel_launch_fixed.zig
+// examples/05_cubin_launch.zig
 // Load a CUBIN module and launch a vector addition kernel
 
 const std = @import("std");
 const zigcuda = @import("zigcuda");
+const cuda = zigcuda.bindings;
 
 pub fn main() !void {
     // Initialize CUDA
-    try zigcuda.init();
-    
+    _ = try zigcuda.init();
+
     std.debug.print("=== CUDA Kernel Launch Example (CUBIN) ===\n\n", .{});
 
-    // Get device and create context  
-    const device = try zigcuda.getDevice(0);
-    var ctx: *zigcuda.CUcontext = undefined;
-    if (zigcuda.bindings.cuCtxCreate) |f| {
+    // Get device and create context
+    const device = try cuda.getDevice(0);
+    var ctx: ?*cuda.CUcontext = null;
+    if (cuda.cuCtxCreate) |f| {
         const result = f(&ctx, 0, device);
         if (result != 0) return error.ContextCreationFailed;
     } else return error.CudaFunctionNotAvailable;
 
     defer {
-        if (zigcuda.bindings.cuCtxDestroy) |f| _ = f(ctx);
+        if (ctx) |c| {
+            if (cuda.cuCtxDestroy) |f| _ = f(c);
+        }
     }
 
     // Array size for vector addition
@@ -100,18 +103,19 @@ pub fn main() !void {
 
     std.debug.print("Launching kernel with {d} blocks x {d} threads\n", .{ blocks, threads_per_block });
 
-    // Launch kernel
-    if (zigcuda.bindings.cuModuleLaunchKernel) |f| {
-        const result = f(
-            kernel.?,
-            blocks, 1, 1,              // grid dimensions  
-            threads_per_block, 1, 1,   // block dimensions
-            0,                            // shared memory
-            null,                        // stream
-            &params,
-        );
-        if (result != 0) return error.KernelLaunchFailed;
-    } else return error.CudaFunctionNotAvailable;
+    // Launch kernel using high-level wrapper
+    try zigcuda.launchKernel(
+        kernel.?,
+        blocks,
+        1,
+        1, // grid dimensions
+        threads_per_block,
+        1,
+        1, // block dimensions
+        0, // shared memory
+        null, // stream
+        &params,
+    );
 
     std.debug.print("✓ Kernel launched\n\n", .{});
 

@@ -7,8 +7,7 @@ const cuda = zigcuda.bindings;
 
 pub fn main() !void {
     // Initialize CUDA
-    try cuda.load();
-    try cuda.init(0);
+    _ = try zigcuda.init();
 
     std.debug.print("=== CUDA Kernel Launch Example ===\n\n", .{});
 

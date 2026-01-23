@@ -24,6 +24,28 @@ pub const copyHostToDevice = cuda_bindings.copyHostToDevice;
 pub const copyDeviceToHost = cuda_bindings.copyDeviceToHost;
 pub const launchKernel = cuda_bindings.launchKernel;
 
+// Module and function management
+pub const loadModule = cuda_bindings.loadModule;
+pub const loadModuleFromData = cuda_bindings.loadModuleFromData;
+pub const unloadModule = cuda_bindings.unloadModule;
+pub const getFunctionFromModule = cuda_bindings.getFunctionFromModule;
+
+// Stream and Event management
+pub const createStream = cuda_bindings.createStream;
+pub const destroyStream = cuda_bindings.destroyStream;
+pub const syncStream = cuda_bindings.syncStream;
+pub const createEvent = cuda_bindings.createEvent;
+pub const destroyEvent = cuda_bindings.destroyEvent;
+
+// Opaque handles
+pub const CUdevice = cuda_bindings.CUdevice;
+pub const CUcontext = cuda_bindings.CUcontext;
+pub const CUstream = cuda_bindings.CUstream;
+pub const CUevent = cuda_bindings.CUevent;
+pub const CUmodule = cuda_bindings.CUmodule;
+pub const CUfunction = cuda_bindings.CUfunction;
+pub const CUdeviceptr = cuda_bindings.CUdeviceptr;
+
 // Type alias for CUDA int type
 pub const CudaCInt = cuda_bindings.c_int;
 
@@ -79,7 +101,7 @@ pub const Context = struct {
         // 4. Get SM Count (Streaming Multiprocessor count)
         var sm_count: CudaCInt = 0;
         if (cuda_bindings.cuDeviceGetAttribute) |f| {
-            _ = f(&sm_count, 16, dev);
+            _ = f(&sm_count, cuda_bindings.CU_DEVICE_ATTRIBUTE_MULTIPROCESSOR_COUNT, dev);
         }
 
         props.multiProcessorCount = sm_count;
