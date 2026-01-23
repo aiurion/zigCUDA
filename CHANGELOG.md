@@ -4,7 +4,7 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and this project adheres to [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
-## [0.0.2] - 2026-01-23
+## [0.0.1b] - 2026-01-23
 ### ✨ Major Update: CUDA v2 Memory APIs & Example Suite
 
 ### Added
