@@ -178,7 +178,7 @@ pub const MemoryPool = struct {
     pub fn free(self: *MemoryPool, ptr: anytype) void {
         const cuda_ptr = @intFromPtr(ptr.ptr);
 
-        if (self.allocations.remove(self.allocator, cuda_ptr)) |entry| {
+        if (self.allocations.fetchRemove(cuda_ptr)) |entry| {
             self.total_allocated -= entry.value.size;
 
             // Free using the preferred wrapper (tries _v2 first)

@@ -132,13 +132,17 @@ pub const Stream = struct {
             std.log.warn("cuStreamDestroy not available on this system", .{});
         }
     }
-};
 
-/// Synchronously wait for all operations in this stream to complete
-pub fn synchronize(_: *Stream) !void {
-    // Simplified - would call actual CUDA API
-    return;
-}
+    /// Synchronously wait for all operations in this stream to complete
+    pub fn synchronize(self: *const Stream) errors.CUDAError!void {
+        if (bindings.cuStreamSynchronize) |f| {
+            const result = f(self.handle);
+            if (result != bindings.CUDA_SUCCESS) return errors.cudaError(result);
+        } else {
+            return error.SymbolNotFound;
+        }
+    }
+};
 
 /// Check completion status without blocking (async query)
 pub fn query(self: *const Stream) !bool {

@@ -1,14 +1,14 @@
-// examples/03_kernel_launch.zig
-// Load a PTX module and launch a vector addition kernel using core abstractions
+// examples/05_cubin_launch.zig
+// Load a CUBIN module and launch a vector addition kernel using core abstractions
 
 const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    // Initialize CUDA
+    // Initialize CUDA driver
     try zigcuda.init();
 
-    std.debug.print("=== CUDA Kernel Launch Example ===\n\n", .{});
+    std.debug.print("=== CUDA Kernel Launch Example (CUBIN) ===\n\n", .{});
 
     // Initialize device and context
     var ctx = try zigcuda.Context.init(0);
@@ -47,12 +47,13 @@ pub fn main() !void {
     try zigcuda.copyHostToDevice(d_a, std.mem.sliceAsBytes(h_a));
     try zigcuda.copyHostToDevice(d_b, std.mem.sliceAsBytes(h_b));
 
-    // Load PTX module using core Module abstraction
-    const ptx_source = @embedFile("kernels/vector_add.ptx");
-    var module = try zigcuda.Module.loadEmbedded(allocator, ptx_source);
+    std.debug.print("✓ Memory allocated and initialized\n", .{});
+
+    // Load CUBIN module from file (production approach)
+    var module = try zigcuda.Module.loadFile(allocator, "kernels/vector_add.cubin");
     defer module.unload();
 
-    std.debug.print("✓ PTX module loaded\n", .{});
+    std.debug.print("✓ CUBIN module loaded from file\n", .{});
 
     // Get kernel function using core Kernel abstraction
     const kernel = try zigcuda.Kernel.init(&module, "vector_add");
@@ -73,7 +74,7 @@ pub fn main() !void {
 
     std.debug.print("Launching kernel with {d} blocks x {d} threads\n", .{ blocks, threads_per_block });
 
-    // Launch kernel using unified Kernel abstraction pattern
+    // Launch kernel using core Kernel abstraction
     try kernel.launch(.{
         .grid_size = .{ blocks, 1, 1 },
         .block_size = .{ threads_per_block, 1, 1 },
@@ -99,7 +100,14 @@ pub fn main() !void {
 
     if (errors == 0) {
         std.debug.print("✓ SUCCESS: Vector addition completed correctly\n", .{});
-        std.debug.print("Result C: [{d:.1}, {d:.1}, ..., {d:.1}]\n", .{ h_c[0], h_c[1], h_c[n - 1] });
+        std.debug.print("Verified: C[i] = A[i] + B[i] for all {d} elements\n\n", .{n});
+
+        // Show compilation info
+        std.debug.print("=== Production Workflow ===\n", .{});
+        std.debug.print("Step 1: Compile .cu → .cubin:\n", .{});
+        std.debug.print("nvcc -arch=compute_80 --gpu-code=sm_90a --cubin vector_add.cu\n\n", .{});
+        std.debug.print("Step 2: Load .cubin at runtime with Module.loadFile()\n", .{});
+        std.debug.print("This is the production-ready approach!\n", .{});
     } else {
         std.debug.print("✗ FAILED: {d} errors detected\n", .{errors});
         return error.VerificationFailed;

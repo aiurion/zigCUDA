@@ -85,15 +85,17 @@ const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    try zigcuda.bindings.init();
+    // High-level init returns a Context helper
+    var ctx = try zigcuda.init();
+    defer ctx.deinit();
 
-    const device_count = try zigcuda.bindings.getDeviceCount();
+    const device_count = ctx.getDeviceCount();
     std.debug.print("Found {d} CUDA device(s)\n", .{device_count});
 
-    for (0..@min(device_count, 3)) |i| {
-        const props = try zigcuda.bindings.getDeviceProperties(@intCast(i));
-        std.debug.print("Device {d}: {s}\n", .{
-            i, @as([:0]const u8, @ptrCast(&props.name)),
+    for (0..device_count) |i| {
+        const props = try ctx.getDeviceProperties(@intCast(i));
+        std.debug.print("Device {d}: {s} (Compute {d}.{d})\n", .{
+            i, std.mem.sliceTo(&props.name, 0), props.major, props.minor
         });
     }
 }
@@ -105,27 +107,21 @@ const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    try zigcuda.bindings.init();
+    _ = try zigcuda.init();
     
     // Load compiled CUDA binary (.cubin file)
-    const filename: [:0]zigcuda.bindings.@"c_char" = "my_kernel.cubin";
-    const module = try zigcuda.bindings.loadModule(filename);
+    const module = try zigcuda.loadModule("my_kernel.cubin");
+    defer _ = zigcuda.unloadModule(module) catch {};
     
-    var kernel_name_buf = "my_kernel".*;
-    const c_kernel_name: [:0]zigcuda.bindings.@"c_char" = @ptrCast(&kernel_name_buf);
-    const kernel_func = try zigcuda.bindings.getFunctionFromModule(module, c_kernel_name);
+    const kernel_func = try zigcuda.getFunctionFromModule(module, "my_kernel");
 
-    // Launch with correct parameter count (grid_dim_z is required!)
+    // Launch with correct grid/block dimensions
     const empty_params: []?*anyopaque = &.{};
     
-    try zigcuda.bindings.launchKernel(kernel_func,
-        1,          // grid_dim_x
-        1,          // grid_dim_y  
-        1,          // FIXED: grid_dim_z (cannot be 0!)
-        32,         // block_dim_x 
-        1,          // block_dim_y
-        1,          // block_dim_z
-        0,           // shared_mem_bytes
+    try zigcuda.launchKernel(kernel_func,
+        1, 1, 1,    // grid_dim (x, y, z)
+        32, 1, 1,   // block_dim (x, y, z)
+        0,          // shared_mem_bytes
         null,       // stream
         empty_params // kernel parameters
     );

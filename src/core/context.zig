@@ -44,4 +44,13 @@ pub const Context = struct {
     pub fn isValid(self: *const Context) bool {
         return self.handle != null;
     }
+
+    /// Synchronize all operations in the current context
+    pub fn synchronize(self: *const Context) !void {
+        if (self.handle == null) return errors.CUDAError.InvalidContext;
+        if (bindings.cuCtxSynchronize) |f| {
+            const result = f();
+            if (result != bindings.CUDA_SUCCESS) return errors.cudaError(result);
+        } else return error.SymbolNotFound;
+    }
 };

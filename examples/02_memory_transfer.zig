@@ -6,10 +6,14 @@ const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
     // Initialize CUDA
-    try zigcuda.loadCuda();
-    try zigcuda.initCuda(0);
+    try zigcuda.init();
 
     std.debug.print("=== CUDA Memory Transfer Example ===\n\n", .{});
+
+    // Create a context for the first device
+    var ctx = try zigcuda.Context.init(0);
+    defer ctx.deinit();
+    try ctx.makeCurrent();
 
     // Allocate host memory and initialize with test data
     const array_size = 1024;
@@ -34,7 +38,7 @@ pub fn main() !void {
         host_input[array_size - 1],
     });
 
-    // Allocate device memory
+    // Allocate device memory using high-level re-export
     const device_ptr = try zigcuda.allocDeviceMemory(byte_size);
     defer _ = zigcuda.freeDeviceMemory(device_ptr) catch {};
 
@@ -42,12 +46,12 @@ pub fn main() !void {
 
     // Transfer data from host to device
     std.debug.print("Copying data from host to device...\n", .{});
-    try zigcuda.copyHostToDevice(device_ptr, host_input.ptr, byte_size);
+    try zigcuda.copyHostToDevice(device_ptr, std.mem.sliceAsBytes(host_input));
     std.debug.print("✓ Host-to-device transfer complete\n\n", .{});
 
     // Transfer data back from device to host
     std.debug.print("Copying data from device to host...\n", .{});
-    try zigcuda.copyDeviceToHost(host_output.ptr, device_ptr, byte_size);
+    try zigcuda.copyDeviceToHost(std.mem.sliceAsBytes(host_output), device_ptr);
     std.debug.print("✓ Device-to-host transfer complete\n\n", .{});
 
     // Verify data integrity

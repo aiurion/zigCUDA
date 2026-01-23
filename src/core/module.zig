@@ -1,7 +1,7 @@
 // src/core/module.zig - Phase 2: Clean implementation
 // PTX/CUBIN compilation and loading with proper error handling
 const std = @import("std");
-const bindings = @import("cuda");
+const bindings = @import("../bindings/cuda.zig");
 
 /// JIT options for runtime-compiled kernels
 pub const JitOptions = struct {
@@ -198,128 +198,7 @@ pub fn getFunction(self: *Module, name: [:0]const u8) !*bindings.CUfunction {
         }
     }
 };
-/// High-level kernel wrapper with type-safe launch capabilities
-pub const Kernel = struct {
-    function_handle: *bindings.CUfunction,
-    name: [:0]const u8,
 
-    /// Create a new kernel from module and function name
-    pub fn init(module: Module, name: [:0]const u8) !Kernel {
-        // Get the function handle with proper error mapping  
-        const function_ptr = module.getFunction(name) catch |err| {
-            switch (err) {
-                bindings.errors.CUDAError.NotFound => return @import("kernel").KernelError.FunctionNotFound,
-                else => return err,  // Propagate other errors unchanged
-            }
-        };
-
-        return Kernel{
-            .function_handle = function_ptr,
-            .name = name,
-        };
-    }
-
-    /// Launch kernel with grid and block dimensions
-    pub fn launch(self: *const Kernel, grid_x: bindings.c_uint, grid_y: bindings.c_uint, grid_z: bindings.c_uint, block_x: bindings.c_uint, block_y: bindings.c_uint, block_z: bindings.c_uint, shared_mem_bytes: bindings.c_uint, stream: ?*bindings.CUstream, params: []?*anyopaque) !void {
-        if (bindings.launchKernel) |launch_kernel| {
-            // Convert slice to C-style array for CUDA API
-            var c_params: [64]?*anyopaque = undefined; // Support up to 64 parameters
-
-            const param_count = @min(params.len, 64);
-            for (0..param_count) |i| {
-                c_params[i] = params[i];
-            }
-
-            const result = launch_kernel(self.function_handle, grid_x, grid_y, grid_z, block_x, block_y, block_z, shared_mem_bytes, stream, &c_params[0..param_count]);
-
-            if (result != 0) { // CUDA_SUCCESS
-                const err = bindings.errors.cudaError(result);
-                
-                // Return the original CUDA not found error
-                return err;
-            }
-        } else {
-            return error.SymbolNotFound;
-        }
-    }
-
-    /// Launch with simplified 2D configuration
-    pub fn launch2D(self: *const Kernel, grid_width: u32, grid_height: u32, block_width: bindings.c_uint, block_height: u32, stream: ?*bindings.CUstream, params: []?*anyopaque) !void {
-        try self.launch(@as(bindings.c_uint, grid_width), @as(bindings.c_uint, grid_height), 1, block_width, block_height, 1, 0, stream, params);
-    }
-
-    /// Launch with simplified 3D configuration
-    pub fn launch3D(self: *const Kernel, grid_dims: [2]u32, block_dims: [3]bindings.c_uint, stream: ?*bindings.CUstream, params: []?*anyopaque) !void {
-        try self.launch(@as(bindings.c_uint, grid_dims[0]), @as(bindings.c_uint, grid_dims[1]), 1, block_dims[0], block_dims[1], block_dims[2], 0, stream, params);
-    }
-
-    /// Set cache configuration for this specific kernel
-    pub fn setCacheConfig(self: *const Kernel, config: bindings.c_int) !void {
-        if (bindings.setFunctionCacheConfig) |set_func_cache_config| {
-            const result = set_func_cache_config(self.function_handle, config);
-
-            if (result != 0) { // CUDA_SUCCESS
-                const err = bindings.errors.cudaError(result);
-                
-                // Return the original CUDA not found error
-                return err;
-            }
-        } else {
-            return error.SymbolNotFound;
-        }
-    }
-
-    /// Configure shared memory allocation for this kernel
-    pub fn setSharedMemSize(self: *const Kernel, bytes: bindings.c_int) !void {
-        if (bindings.setFunctionSharedMemConfig) |set_func_shared_mem_config| {
-            const result = set_func_shared_mem_config(self.function_handle, bytes);
-
-            if (result != 0) { // CUDA_SUCCESS
-                const err = bindings.errors.cudaError(result);
-                
-                // Return the original CUDA not found error
-                return err;
-            }
-        } else {
-            return error.SymbolNotFound;
-        }
-    }
-
-    /// Get kernel attribute
-    pub fn getAttribute(self: *const Kernel, attrib: bindings.c_int) !bindings.c_int {
-        if (bindings.getFunctionAttribute) |get_func_attr| {
-            var value: bindings.c_int = undefined;
-
-            const result = get_func_attr(&value, attrib, self.function_handle);
-
-            if (result != 0) { // CUDA_SUCCESS
-                const err = bindings.errors.cudaError(result);
-                
-                // Return the original CUDA not found error
-                return err;
-            }
-            return value;
-        } else {
-            return error.SymbolNotFound;
-        }
-    }
-
-    /// Set kernel attribute
-    pub fn setAttribute(self: *const Kernel, attrib: bindings.c_int, value: bindings.c_int) !void {
-        if (bindings.setFunctionAttribute) |set_func_attr| {
-            const result = set_func_attr(self.function_handle, attrib, value);
-
-            if (result != 0) { // CUDA_SUCCESS
-                const err = bindings.errors.cudaError(result);
-                
-                // Return the original CUDA not found error
-                return err;
-            }
-        } else {
-            return error.SymbolNotFound;
-        }
-    }
-};
 /// Simplified compilation options for PTX compilation
 pub const CompilationOptions = struct {
     optimization_level: enum { none, basic, full },
@@ -394,5 +273,3 @@ pub const ModuleLoader = struct {
         }
     }
 };
-/// Convenience functions for common module operations
-pub const loadDefaultStreamKernel = Kernel.init; // Alias for compatibility

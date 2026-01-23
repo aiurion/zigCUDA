@@ -1,30 +1,28 @@
 // examples/01_device_info.zig
-// Basic CUDA device enumeration and property querying
+// Basic CUDA device enumeration and property querying using high-level core API
 
 const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    // Initialize CUDA and get context
-    var ctx = try zigcuda.init();
-    defer ctx.deinit();
+    // Initialize CUDA driver
+    try zigcuda.init();
 
-    const device_count = ctx.getDeviceCount();
+    const device_count = try zigcuda.Device.count();
     std.debug.print("Found {d} CUDA device(s)\n\n", .{device_count});
 
     // Query properties for each device
-    var i: u32 = 0;
-    while (i < device_count) : (i += 1) {
-        const props = try ctx.getDeviceProperties(i);
+    for (0..device_count) |i| {
+        const device = try zigcuda.Device.init(@intCast(i));
+        const props = device.getProperties();
 
         // Extract null-terminated name
-        const name_len = std.mem.indexOfScalar(u8, &props.name, 0) orelse props.name.len;
-        const device_name = props.name[0..name_len];
+        const device_name = std.mem.sliceTo(&props.name, 0);
 
         std.debug.print("Device {d}: {s}\n", .{ i, device_name });
-        std.debug.print("  Compute Capability: {d}.{d}\n", .{ props.major, props.minor });
-        std.debug.print("  Total Memory: {d:.2} GB\n", .{@as(f64, @floatFromInt(props.totalGlobalMem)) / (1024.0 * 1024.0 * 1024.0)});
-        std.debug.print("  Multiprocessors: {d}\n", .{props.multiProcessorCount});
+        std.debug.print("  Compute Capability: {d}.{d}\n", .{ props.compute_capability.major, props.compute_capability.minor });
+        std.debug.print("  Total Memory: {d:.2} GB\n", .{@as(f64, @floatFromInt(props.total_memory)) / (1024.0 * 1024.0 * 1024.0)});
+        std.debug.print("  Multiprocessors: {d}\n", .{props.multiprocessor_count});
         std.debug.print("\n", .{});
     }
 }

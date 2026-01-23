@@ -1,110 +1,42 @@
-// src/lib.zig
+// src/lib.zig - Unified entry point for ZigCUDA
 const std = @import("std");
-const cuda_bindings = @import("bindings/cuda.zig");
+pub const bindings = @import("bindings/cuda.zig");
+pub const errors = @import("bindings/errors.zig");
 
-pub const version = std.SemanticVersion{
-    .major = 0,
-    .minor = 0,
-    .patch = 1,
-};
+// Re-export core abstractions as the primary public API
+pub const Device = @import("core/device.zig").Device;
+pub const DeviceProperties = @import("core/device.zig").DeviceProperties;
+pub const Context = @import("core/context.zig").Context;
+pub const Module = @import("core/module.zig").Module;
+pub const Stream = @import("core/stream.zig").Stream;
+pub const Kernel = @import("core/kernel.zig").Kernel;
 
+// Metadata
+pub const version = std.SemanticVersion{ .major = 0, .minor = 0, .patch = 1 };
 pub const version_string = "0.0.1";
 
-pub const bindings = cuda_bindings;
-
-// Re-export key functions for public API (avoiding conflicts with our own init function)
-pub const initCuda = cuda_bindings.init;
-pub const loadCuda = cuda_bindings.load;
-pub const getVersion = cuda_bindings.getVersion;
-pub const getDeviceCount = cuda_bindings.getDeviceCount;
-pub const getDevice = cuda_bindings.getDevice;
-pub const allocDeviceMemory = cuda_bindings.allocDeviceMemory;
-pub const freeDeviceMemory = cuda_bindings.freeDeviceMemory;
-pub const copyHostToDevice = cuda_bindings.copyHostToDevice;
-pub const copyDeviceToHost = cuda_bindings.copyDeviceToHost;
-pub const launchKernel = cuda_bindings.launchKernel;
-
-// Type alias for CUDA int type
-pub const CudaCInt = cuda_bindings.c_int;
-
-/// High-level device properties struct
-pub const DeviceProperties = struct {
-    name: [256]u8,
-    major: CudaCInt,
-    minor: CudaCInt,
-    totalGlobalMem: usize,
-    multiProcessorCount: CudaCInt,
-};
-
-pub const Context = struct {
-    device_count: u32,
-
-    pub fn getDeviceCount(self: Context) u32 {
-        return self.device_count;
-    }
-
-    pub fn isAvailable(self: Context) bool {
-        return self.device_count > 0;
-    }
-
-    /// Get populated device properties using individual attribute queries
-    pub fn getDeviceProperties(self: Context, device_id: u32) !DeviceProperties {
-        if (device_id >= self.device_count) {
-            return error.InvalidDeviceId;
-        }
-
-        const dev = try cuda_bindings.getDevice(@as(CudaCInt, @intCast(device_id)));
-
-        var props: DeviceProperties = undefined;
-
-        // 1. Get Name safely
-        // Initialize buffer with zeros to avoid garbage output
-        @memset(&props.name, 0);
-        if (cuda_bindings.cuDeviceGetName) |f| {
-            // FIX: Cast to [*:0]cuda.c_char because the C API expects signed chars (i8) on Linux
-            const ptr = @as([*:0]cuda_bindings.c_char, @ptrCast(&props.name));
-            _ = f(ptr, 256, dev);
-        }
-
-        // 2. Get Compute Capability
-        // We use the helper from bindings which handles the logic
-        const cc = try cuda_bindings.getComputeCapability(dev);
-        props.major = cc.major;
-        props.minor = cc.minor;
-
-        // 3. Get Memory
-        const mem_bytes = try cuda_bindings.getTotalMem(dev);
-        props.totalGlobalMem = mem_bytes;
-
-        // 4. Get SM Count (Streaming Multiprocessor count)
-        var sm_count: CudaCInt = 0;
-        if (cuda_bindings.cuDeviceGetAttribute) |f| {
-            _ = f(&sm_count, 16, dev);
-        }
-
-        props.multiProcessorCount = sm_count;
-
-        return props;
-    }
-
-    pub fn deinit(self: *Context) void {
-        _ = self;
-    }
-};
-
-pub fn init() !Context {
-    cuda_bindings.load() catch return error.CudaLoadFailed;
-    cuda_bindings.init(0) catch return error.CudaInitFailed;
-
-    const count_result = cuda_bindings.getDeviceCount();
-    const device_count = count_result catch return error.CudaInitFailed;
-
-    if (device_count == 0) {
-        return error.NoCudaDevice;
-    }
-
-    return Context{ .device_count = @as(u32, @intCast(device_count)) };
+/// Initialize the CUDA driver and load necessary symbols.
+/// This must be called before using any other CUDA functionality.
+pub fn init() !void {
+    try bindings.load();
+    try bindings.init(0);
 }
+
+// Convenience re-exports for common low-level operations
+pub const allocDeviceMemory = bindings.allocDeviceMemory;
+pub const freeDeviceMemory = bindings.freeDeviceMemory;
+pub const copyHostToDevice = bindings.copyHostToDevice;
+pub const copyDeviceToHost = bindings.copyDeviceToHost;
+pub const launchKernel = bindings.launchKernel;
+
+// Opaque handles for advanced usage
+pub const CUdevice = bindings.CUdevice;
+pub const CUcontext = bindings.CUcontext;
+pub const CUstream = bindings.CUstream;
+pub const CUevent = bindings.CUevent;
+pub const CUmodule = bindings.CUmodule;
+pub const CUfunction = bindings.CUfunction;
+pub const CUdeviceptr = bindings.CUdeviceptr;
 
 test {
     std.testing.refAllDecls(@This());

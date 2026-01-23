@@ -2,13 +2,12 @@
 // Implements compile-time validation, PTX loading, and error handling
 
 const std = @import("std");
-const cuda = @import("cuda");
-const bindings = cuda;
-pub const errors = cuda.errors;
-const core = @import("core");
+const bindings = @import("../bindings/cuda.zig");
+pub const errors = @import("../bindings/errors.zig");
+const module_lib = @import("module.zig");
 
 // Re-export Module from core
-pub const Module = core.Module;
+pub const Module = module_lib.Module;
 
 /// Kernel execution errors mapped from CUDA runtime
 pub const KernelError = error{
@@ -27,6 +26,7 @@ pub const KernelConfig = struct {
     grid_size: [3]u32,
     block_size: [3]u32,
     shared_memory: u32,
+    stream: ?*bindings.CUstream = null,
 
     /// Create default configuration for 1D launch
     pub fn initDefault() KernelConfig {
@@ -102,9 +102,9 @@ pub const Kernel = struct {
 
         // Pass parameters directly to CUDA bindings (correct parameter order)
         try bindings.launchKernel(self.function_handle, 
-            config.grid_size[0], config.grid_size[1], 1,
+            config.grid_size[0], config.grid_size[1], config.grid_size[2],
             config.block_size[0], config.block_size[1], config.block_size[2],  
-            config.shared_memory, null, params);
+            config.shared_memory, config.stream, params);
     }
 
     /// Simplified 1D kernel launch with automatic grid sizing
@@ -245,13 +245,14 @@ pub const KernelUtils = struct {
         const block_size = @min(256, num_elements);
         const grid_size = (num_elements + block_size - 1) / block_size;
 
-        var params = [5]?*anyopaque{ a_ptr, b_ptr, result_ptr, &num_elements };
+        var params = [4]?*anyopaque{ @constCast(@ptrCast(a_ptr)), @constCast(@ptrCast(b_ptr)), @constCast(@ptrCast(result_ptr)), @constCast(@ptrCast(&num_elements)) };
 
         try kernel.launch(KernelConfig{
             .grid_size = .{ grid_size, 1, 1 },
             .block_size = .{ block_size, 1, 1 },
             .shared_memory = 0,
-        }, stream, params[0..4]);
+            .stream = stream,
+        }, &params);
     }
 
     /// Launch matrix multiplication kernel with optimal configuration
@@ -260,13 +261,14 @@ pub const KernelUtils = struct {
         const block_x = @min(256, k);
         const block_y = @min(64, m / 2); // Optimize for GPU throughput
 
-        var params = [7]?*anyopaque{ a_ptr, b_ptr, result_ptr, &m, &n, &k };
+        var params = [6]?*anyopaque{ @constCast(@ptrCast(a_ptr)), @constCast(@ptrCast(b_ptr)), @constCast(@ptrCast(result_ptr)), @constCast(@ptrCast(&m)), @constCast(@ptrCast(&n)), @constCast(@ptrCast(&k)) };
 
         try kernel.launch(KernelConfig{
             .grid_size = .{ (m + block_y - 1) / block_y, n, 1 },
             .block_size = .{ block_x, block_y, 1 },
             .shared_memory = @max(block_x * block_y * 4, 16384), // Sufficient shared memory
-        }, stream, params[0..6]);
+            .stream = stream,
+        }, &params);
     }
 };
 

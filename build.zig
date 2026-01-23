@@ -304,4 +304,24 @@ pub fn build(b: *std.Build) !void {
     all_tests_step.dependOn(kernel_integration_test_step);
     all_tests_step.dependOn(simple_integration_test_step);
     all_tests_step.dependOn(cublas_integration_test_step);
+
+    // Build examples
+    const examples = [_][]const u8{
+        "01_device_info",
+        "02_memory_transfer",
+        "03_kernel_launch",
+        "04_streams",
+        "05_cubin_launch",
+    };
+
+    for (examples) |example_name| {
+        const exe = b.addExecutable(.{
+            .name = example_name,
+            .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
+            .target = target,
+        });
+        exe.root_module.addImport("zigcuda", lib_module);
+        exe.linkLibC();
+        b.installArtifact(exe);
+    }
 }
