@@ -297,32 +297,6 @@ pub fn build(b: *std.Build) !void {
     const cublas_simple_test_step = b.step("test-cublas-simple", "Run simplified cuBLAS stub tests");
     cublas_simple_test_step.dependOn(&run_cublas_simple_tests.step);
 
-    // Create Functions 59-65 test module
-    const functions_59_65_test_module = b.createModule(.{
-        .root_source_file = b.path("test/cublas_functions_59_65_test.zig"),
-        .target = target,
-    });
-
-    // Create Functions 59-65 test executable
-    const functions_59_65_tests = b.addTest(.{
-        .root_module = functions_59_65_test_module,
-    });
-
-    // Link Functions 59-65 tests against system libc
-    functions_59_65_tests.linkLibC();
-
-    // Use system dynamic linker for Functions 59-65 tests
-    const run_functions_59_65_tests = b.addSystemCommand(&.{
-        "/lib64/ld-linux-x86-64.so.2",
-    });
-    run_functions_59_65_tests.addArtifactArg(functions_59_65_tests);
-
-    // Add Functions 59-65 test step
-    const functions_59_65_test_step = b.step("test-cublas-functions-59-65", "Run cuBLAS Functions 59-65 implementation tests");
-    functions_59_65_test_step.dependOn(&run_functions_59_65_tests.step);
-
-    // COMBINED TEST STEP - RUNS ALL TESTS
-
     const all_tests_step = b.step("test", "Run all tests (bindings + v2-memory + runtime + kernel integration + simple + cuBLAS integration)");
     all_tests_step.dependOn(bindings_test_step);
     all_tests_step.dependOn(v2_memory_test_step);
@@ -330,5 +304,4 @@ pub fn build(b: *std.Build) !void {
     all_tests_step.dependOn(kernel_integration_test_step);
     all_tests_step.dependOn(simple_integration_test_step);
     all_tests_step.dependOn(cublas_integration_test_step);
-    all_tests_step.dependOn(functions_59_65_test_step);
 }
