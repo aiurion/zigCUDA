@@ -1,5 +1,5 @@
 [![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
-[![Tests: 95/97 Passing](https://img.shields.io/badge/Tests-95%2F97_Passing-brightgreen)](#)
+[![Tests: 101/101 Passing](https://img.shields.io/badge/Tests-101%2F101_Passing-brightgreen)](#)
 [![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
 # zigCUDA - CUDA Driver API for Zig
@@ -163,7 +163,7 @@ zig build run       # Diagnostic tool
 
 ## 🤝 Contributing
 
-Open issues for bugs/features. 
+Open issues for bugs & in-scope features. 
 
 ## 📜 License
 

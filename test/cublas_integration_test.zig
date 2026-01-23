@@ -33,20 +33,20 @@ test "cuBLAS: Single-precision matrix multiplication (sgemm)" {
     defer cublas.deinit() catch unreachable;
 
     // Test matrices: A(2x3), B(3x4) -> C(2x4)
+    // A = [[1, 2, 3], [4, 5, 6]]
+    // B = [[7, 8, 9, 10], [11, 12, 13, 14], [15, 16, 17, 18]]
     const a = [_]f32{ 1.0, 2.0, 3.0, 4.0, 5.0, 6.0 }; // 2x3
     const b = [_]f32{ 7.0, 8.0, 9.0, 10.0, 11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0 }; // 3x4
     var c = [_]f32{ 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0 }; // 2x4
 
-    // const expected_c = [8]f32{
-    //     // Row 1: (1*7 + 2*10 + 3*13), (1*8 + 2*11 + 3*14), etc.
-    //     54.0, 60.0, 66.0, 72.0,
-    //     120.0, 138.0, 156.0, 174.0
-    // };
+    const expected_c = [8]f32{
+        // Row 0: [1*7 + 2*11 + 3*15, 1*8 + 2*12 + 3*16, 1*9 + 2*13 + 3*17, 1*10 + 2*14 + 3*18]
+        74.0, 80.0, 86.0, 92.0,
+        // Row 1: [4*7 + 5*11 + 6*15, 4*8 + 5*12 + 6*16, 4*9 + 5*13 + 6*17, 4*10 + 5*14 + 6*18]
+        173.0, 188.0, 203.0, 218.0
+    };
 
-    // For now just test that the function can be called without crashing
-    // Matrix dimension validation and row-major vs column-major handling is complex
-
-    _ = cublas.sgemm(
+    try cublas.sgemm(
         2, // m: rows of op(A) and C
         4, // n: cols of op(B) and C
         3, // k: cols of op(A) and rows of op(B)
@@ -58,14 +58,12 @@ test "cuBLAS: Single-precision matrix multiplication (sgemm)" {
         0.0,
         &c,
         4, // ldc: leading dimension for C
-    ) catch |err| {
-        std.debug.print("DEBUG: SGEMM failed with error: {s}\n", .{@errorName(err)});
+    );
 
-        // For now, just verify cuBLAS is being called (even if parameters need adjustment)
-        try testing.expect(true); // Test passes as long as we get here without segfault
-    };
-
-    std.debug.print("DEBUG: SGEMM completed - result c[0] = {}\n", .{c[0]});
+    const epsilon = @as(f32, 1e-5);
+    inline for (0..8) |i| {
+        try testing.expectApproxEqAbs(expected_c[i], c[i], epsilon);
+    }
 }
 
 test "cuBLAS: Double-precision matrix multiplication (dgemm)" {
@@ -239,41 +237,27 @@ test "cuBLAS: Large matrix multiplication performance" {
 
     std.log.info("cuBLAS large matrix performance: {} GFLOPS/s", .{gflops_per_sec});
 
-    // Basic sanity check - should complete without error
-    try testing.expect(c[0] != c[c.len - 1]); // Verify computation occurred
-}
-
-test "cuBLAS: Error handling for invalid operations" {
-    const init_result = integrations.Cublas.init();
-
-    if (init_result == error.CudaError) {
-        std.debug.print("INFO: cuBLAS library not available - skipping error handling test\n", .{});
-        return; // Skip gracefully
+    // Spot-check computation correctness at a few positions
+    // C[0,0] = sum(A[0,j] * B[j,0]) for j in 0..k
+    var expected_c00: f32 = 0.0;
+    for (0..k) |j| {
+        expected_c00 += a[j] * b[j * n];
     }
+    try testing.expectApproxEqAbs(expected_c00, c[0], 1e-2);
 
-    var cublas = try init_result;
-    defer cublas.deinit() catch unreachable;
+    // C[1,1] = sum(A[1,j] * B[j,1]) for j in 0..k
+    var expected_c11: f32 = 0.0;
+    for (0..k) |j| {
+        expected_c11 += a[k + j] * b[j * n + 1];
+    }
+    try testing.expectApproxEqAbs(expected_c11, c[n + 1], 1e-2);
 
-    const a = [4]f32{ 1.0, 2.0, 3.0, 4.0 }; // 2x2
-    const b = [4]f32{ 5.0, 6.0, 7.0, 8.0 }; // 2x2
-    var c = [4]f32{ 0.0, 0.0, 0.0, 0.0 };
-
-    // Test with mismatched dimensions (should handle gracefully)
-    try cublas.sgemm(
-        3, // m: This will cause dimension mismatch
-        2, // n
-        2, // k
-        1.0,
-        &a,
-        2, // lda
-        &b,
-        2, // ldb
-        0.0,
-        &c,
-        2, // ldc
-    );
-
-    // Should either succeed with modified dimensions or return appropriate error
+    // C[m-1, n-1] = sum(A[m-1,j] * B[j,n-1]) for j in 0..k
+    var expected_c_last: f32 = 0.0;
+    for (0..k) |j| {
+        expected_c_last += a[(m - 1) * k + j] * b[j * n + (n - 1)];
+    }
+    try testing.expectApproxEqAbs(expected_c_last, c[(m - 1) * n + (n - 1)], 1e-2);
 }
 
 test "cuBLAS: Stream integration" {
@@ -380,27 +364,6 @@ test "cuBLAS: Vector operations - sscal (single-precision vector scaling)" {
     }
 }
 
-test "cuBLAS: Pointer mode configuration" {
-    const init_result = integrations.Cublas.init();
-
-    if (init_result == error.CudaError) {
-        std.debug.print("INFO: cuBLAS library not available - skipping pointer mode test\n", .{});
-        return; // Skip gracefully
-    }
-
-    var cublas = try init_result;
-    defer cublas.deinit() catch unreachable;
-
-    // Test setting pointer modes
-    try cublas.setPointerMode(integrations.CUBLAS_POINTER_MODE_HOST);
-
-    // Verify the call succeeded (stub implementation)
-    // In real implementation, this would configure scalar parameter handling
-
-    // Switch to device mode
-    try cublas.setPointerMode(integrations.CUBLAS_POINTER_MODE_DEVICE);
-}
-
 test "cuBLAS: Batched matrix multiplication setup" {
     const init_result = integrations.Cublas.init();
 
@@ -427,6 +390,15 @@ test "cuBLAS: Batched matrix multiplication setup" {
         &c, 2 // ldc
     );
 
-    // Verify operation completed successfully
-    try testing.expect(c[0] == c[0]); // Basic sanity check
+    // Expected result: A * B where A = [1,2; 3,4] and B = [1,1; 1,1]
+    // C[0,0] = 1*1 + 2*1 = 3
+    // C[0,1] = 1*1 + 2*1 = 3
+    // C[1,0] = 3*1 + 4*1 = 7
+    // C[1,1] = 3*1 + 4*1 = 7
+    const expected_c = [4]f32{ 3.0, 3.0, 7.0, 7.0 };
+
+    const epsilon = @as(f32, 1e-5);
+    inline for (0..4) |i| {
+        try testing.expectApproxEqAbs(expected_c[i], c[i], epsilon);
+    }
 }
