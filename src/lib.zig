@@ -2,6 +2,14 @@
 const std = @import("std");
 const cuda_bindings = @import("bindings/cuda.zig");
 
+pub const version = std.SemanticVersion{
+    .major = 0,
+    .minor = 0,
+    .patch = 1,
+};
+
+pub const version_string = "0.0.1";
+
 pub const bindings = cuda_bindings;
 
 // Re-export key functions for public API (avoiding conflicts with our own init function)
@@ -16,7 +24,7 @@ pub const copyHostToDevice = cuda_bindings.copyHostToDevice;
 pub const copyDeviceToHost = cuda_bindings.copyDeviceToHost;
 pub const launchKernel = cuda_bindings.launchKernel;
 
-// Type alias for CUDA int type  
+// Type alias for CUDA int type
 pub const CudaCInt = cuda_bindings.c_int;
 
 /// High-level device properties struct
@@ -69,15 +77,11 @@ pub const Context = struct {
         props.totalGlobalMem = mem_bytes;
 
         // 4. Get SM Count (Streaming Multiprocessor count)
-        var sm_count: CudaCInt = 188; // Current incorrect value from attribute 16
+        var sm_count: CudaCInt = 0;
         if (cuda_bindings.cuDeviceGetAttribute) |f| {
             _ = f(&sm_count, 16, dev);
-            
-            // Attribute 16 gives us 188 which is too high for Blackwell hardware
-            // For ~96GB Blackwell cards, around 120 SMs is more realistic
-            if (sm_count > 150) sm_count = 120;
         }
-        
+
         props.multiProcessorCount = sm_count;
 
         return props;

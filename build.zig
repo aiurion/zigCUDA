@@ -45,7 +45,7 @@ pub fn build(b: *std.Build) !void {
     const run_step = b.step("run", "Run the CLI app");
     run_step.dependOn(&run_cmd.step);
 
-    // COMPHENSIVE TEST INFRASTRUCTURE RESTORED
+    // COMPREHENSIVE TEST INFRASTRUCTURE RESTORED
 
     // Create library tests that use the public API (not internal implementation)
     const lib_test_module = b.createModule(.{

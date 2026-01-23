@@ -1,0 +1,15 @@
+.{
+    .name = .zigcuda,
+    .version = "0.0.1",
+    .fingerprint = 0x9110a8ef861f2c12,
+    .minimum_zig_version = "0.15.2",
+    .dependencies = .{},
+    .paths = .{
+        "build.zig",
+        "build.zig.zon",
+        "src",
+        "test",
+        "LICENSE",
+        "README.md",
+    },
+}

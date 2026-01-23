@@ -1,12 +1,16 @@
-# zigCUDA - CUDA Driver API for Zig
-
-Pure-Zig bindings to the NVIDIA CUDA Driver API. Dynamic loading of `libcuda.so`, clean high-level wrappers, and stubs for non-CUDA environments. No static linking, no CUDA toolkit required at runtime. Tested on NVIDIA Blackwell (sm_120).
-
 [![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
-[![Tests: 95/97 Passing](https://img.shields.io/badge/Tests-95%2F97_Passing-brightgreen)](#)
+[![Tests: 101/101 Passing](https://img.shields.io/badge/Tests-101%2F101_Passing-brightgreen)](#)
 [![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
-> Core driver wrapper is stable and well-tested. Ready for low-level GPU programming, kernel launching, and basic BLAS operations.
+# zigCUDA - CUDA Driver API for Zig
+
+Blackwell ready, pure Zig (0.15.2+) bindings to the NVIDIA CUDA Driver API
+
+Dynamic loading of libcuda.so, clean high-level wrappers, and graceful stubs for non-CUDA environments.
+
+No static linking, no CUDA toolkit required at runtime.
+
+> Tested on Blackwell (sm_120) — ready for low-level GPU programming, kernel launching, and basic BLAS in Zig.
 
 ## 🚀 Try It Now
 
@@ -47,7 +51,6 @@ INFO: cuInit succeeded
 | Core API (memory, streams, contexts) | Complete           | Full wrappers, async support       |
 | Kernel Launch          | Complete                | cuLaunchKernel + legacy fallback           |
 | cuBLAS Integration     | Partial                 | Basic handle + common ops working           |
-| FlashAttention Prototype | Early                 | Hardware detection + cuBLAS fallback       |
 
 
 ## 🛠️ Using in Your Project
@@ -131,20 +134,7 @@ pub fn main() !void {
 }
 ```
 
-
-## 🏗️ Project Structure
-
-```
-src/
-├── bindings/     # Raw FFI + dynamic loading (cuda.zig is core)
-├── core/         # High-level wrappers (context, device, memory, stream, kernel)
-├── integrations/ # cuBLAS, FlashAttention prototype, etc.
-├── ops/          # Future tensor operations (currently stubs)
-├── examples/     # Demo programs
-└── lib.zig       # Public root (re-exports API)
-```
-
-## 🎯 What This Is vs Isn't
+## Scope
 
 **This IS:**
 - A solid CUDA Driver API wrapper for Zig
@@ -154,13 +144,11 @@ src/
 **This is NOT:**
 - A full ML framework
 - Complete high-level tensor ops
-- Optimized inference engine (FlashAttention is prototype only)
+- Optimized inference engine
 
 ## 🗺️ Roadmap
 
-- **v0.0.x** – Core polish, more tests, Windows support
-- **v0.1.0** – Stable API, basic tensor abstraction, expanded cuBLAS/cuRAND
-- **Later** – Optimized kernels (full FlashAttention, Marlin), model loading, inference primitives
+- **v0.0.x** – Core polish and further validation
 
 ## 🛠️ Development
 
@@ -175,10 +163,7 @@ zig build run       # Diagnostic tool
 
 ## 🤝 Contributing
 
-Open issues for bugs/features. PRs welcome if:
-- Tests pass
-- Core remains dependency-free
-- Changes target low-level first
+Open issues for bugs & in-scopefeatures. 
 
 ## 📜 License
 
