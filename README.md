@@ -163,7 +163,7 @@ zig build run       # Diagnostic tool
 
 ## 🤝 Contributing
 
-Open issues for bugs & in-scopefeatures. 
+Open issues for bugs & in-scope features. 
 
 ## 📜 License
 
