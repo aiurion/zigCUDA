@@ -333,56 +333,36 @@ pub fn load() !void {
     cuGetErrorName = dlsym_lookup(@TypeOf(cuGetErrorName.?), "cuGetErrorName") orelse return error.SymbolNotFound;
     cuGetErrorString = dlsym_lookup(@TypeOf(cuGetErrorString.?), "cuGetErrorString") orelse return error.SymbolNotFound;
 
-    // Memory functions - prefer _v2 for modern CUDA, fall back to v1
-    cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost");
-    if (cuMemAllocHost == null) {
-        cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2");
-    }
+    // Memory functions - prefer _v2 for modern CUDA
+    cuMemAllocHost = dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost_v2") orelse
+        dlsym_lookup(@TypeOf(cuMemAllocHost.?), "cuMemAllocHost");
     if (cuMemAllocHost == null) return error.SymbolNotFound;
 
-    const mem_free_host = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost");
-    if (mem_free_host != null) {
-        cuMemFreeHost = mem_free_host;
-    } else {
-        // Fall back to v2
-        cuMemFreeHost = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost_v2");
-    }
+    cuMemFreeHost = dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost_v2") orelse
+        dlsym_lookup(@TypeOf(cuMemFreeHost.?), "cuMemFreeHost");
+
     if (cuMemFreeHost == null and isDebugEnabled()) {
         std.debug.print("WARNING: cuMemFreeHost not found\n", .{});
     }
 
-    // Device memory - prefer _v2 when available
+    // Device memory - STRICTLY prefer _v2 to avoid 32-bit legacy limits
     const mem_alloc_v2 = dlsym_lookup(@TypeOf(cuMemAlloc_v2.?), "cuMemAlloc_v2");
     if (mem_alloc_v2 != null) {
         cuMemAlloc_v2 = mem_alloc_v2;
-        // Point both variables to v2 for code that uses either
-        const base_alloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc");
-        cuMemAlloc = if (base_alloc != null) base_alloc else cuMemAlloc_v2;
+        cuMemAlloc = mem_alloc_v2; // Force use of v2
     } else {
-        // No v2 available, use v1
-        std.debug.print("INFO: Using v1 for cuMemAlloc (v2 not available)\n", .{});
-        const base_alloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc");
-        if (base_alloc != null) {
-            cuMemAlloc = base_alloc;
-        } else {
-            return error.SymbolNotFound;
-        }
+        std.debug.print("WARNING: cuMemAlloc_v2 not found, falling back to base (might be 32-bit limited)\n", .{});
+        cuMemAlloc = dlsym_lookup(@TypeOf(cuMemAlloc.?), "cuMemAlloc");
+        if (cuMemAlloc == null) return error.SymbolNotFound;
     }
 
-    // Device memory free - prefer _v2 when available
+    // Device memory free - prefer _v2
     const mem_free_v2 = dlsym_lookup(@TypeOf(cuMemFree_v2.?), "cuMemFree_v2");
     if (mem_free_v2 != null) {
         cuMemFree_v2 = mem_free_v2;
-        // Point both variables to v2 for code that uses either
-        const base_free = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree");
-        cuMemFree = if (base_free != null) base_free else cuMemFree_v2;
+        cuMemFree = mem_free_v2; // Force use of v2
     } else {
-        // No v2 available, use v1
-        std.debug.print("INFO: Using v1 for cuMemFree (v2 not available)\n", .{});
-        const base_free = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree");
-        if (base_free != null) {
-            cuMemFree = base_free;
-        }
+        cuMemFree = dlsym_lookup(@TypeOf(cuMemFree.?), "cuMemFree");
     }
 
     if (isDebugEnabled() and cuMemAlloc != null) {
@@ -394,29 +374,17 @@ pub fn load() !void {
     }
 
     // Memory copy operations (prefer v2 for primary context compatibility on CUDA 13+)
-    const memcpy_htod_v2 = dlsym_lookup(@TypeOf(cuMemcpyHtoD_v2.?), "cuMemcpyHtoD_v2");
-    if (memcpy_htod_v2 != null) {
-        cuMemcpyHtoD_v2 = memcpy_htod_v2;
-        cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse cuMemcpyHtoD_v2;
-    } else {
-        cuMemcpyHtoD = dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD") orelse return error.SymbolNotFound;
-    }
+    cuMemcpyHtoD_v2 = dlsym_lookup(@TypeOf(cuMemcpyHtoD_v2.?), "cuMemcpyHtoD_v2");
+    cuMemcpyHtoD = cuMemcpyHtoD_v2 orelse dlsym_lookup(@TypeOf(cuMemcpyHtoD.?), "cuMemcpyHtoD");
+    if (cuMemcpyHtoD == null) return error.SymbolNotFound;
 
-    const memcpy_dtoh_v2 = dlsym_lookup(@TypeOf(cuMemcpyDtoH_v2.?), "cuMemcpyDtoH_v2");
-    if (memcpy_dtoh_v2 != null) {
-        cuMemcpyDtoH_v2 = memcpy_dtoh_v2;
-        cuMemcpyDtoH = dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse cuMemcpyDtoH_v2;
-    } else {
-        cuMemcpyDtoH = dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH") orelse return error.SymbolNotFound;
-    }
+    cuMemcpyDtoH_v2 = dlsym_lookup(@TypeOf(cuMemcpyDtoH_v2.?), "cuMemcpyDtoH_v2");
+    cuMemcpyDtoH = cuMemcpyDtoH_v2 orelse dlsym_lookup(@TypeOf(cuMemcpyDtoH.?), "cuMemcpyDtoH");
+    if (cuMemcpyDtoH == null) return error.SymbolNotFound;
 
-    const memcpy_dtod_v2 = dlsym_lookup(@TypeOf(cuMemcpyDtoD_v2.?), "cuMemcpyDtoD_v2");
-    if (memcpy_dtod_v2 != null) {
-        cuMemcpyDtoD_v2 = memcpy_dtod_v2;
-        cuMemcpyDtoD = dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse cuMemcpyDtoD_v2;
-    } else {
-        cuMemcpyDtoD = dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD") orelse return error.SymbolNotFound;
-    }
+    cuMemcpyDtoD_v2 = dlsym_lookup(@TypeOf(cuMemcpyDtoD_v2.?), "cuMemcpyDtoD_v2");
+    cuMemcpyDtoD = cuMemcpyDtoD_v2 orelse dlsym_lookup(@TypeOf(cuMemcpyDtoD.?), "cuMemcpyDtoD");
+    if (cuMemcpyDtoD == null) return error.SymbolNotFound;
 
     // Optional helper lookups
     cuDeviceComputeCapability = dlsym_lookup(@TypeOf(cuDeviceComputeCapability.?), "cuDeviceComputeCapability");
@@ -426,34 +394,46 @@ pub fn load() !void {
         dlsym_lookup(@TypeOf(cuDeviceTotalMem.?), "cuDeviceTotalMem");
 
     // Async memory operations (optional)
-    cuMemcpyHtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync");
-    cuMemcpyDtoHAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync");
-    cuMemcpyDtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync");
+    cuMemcpyHtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync_v2") orelse
+        dlsym_lookup(@TypeOf(cuMemcpyHtoDAsync.?), "cuMemcpyHtoDAsync");
+    cuMemcpyDtoHAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync_v2") orelse
+        dlsym_lookup(@TypeOf(cuMemcpyDtoHAsync.?), "cuMemcpyDtoHAsync");
+    cuMemcpyDtoDAsync = dlsym_lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync_v2") orelse
+        dlsym_lookup(@TypeOf(cuMemcpyDtoDAsync.?), "cuMemcpyDtoDAsync");
 
     // Memory information and handle operations - prefer _v2 for modern CUDA
     const mem_info_v2 = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo_v2");
     if (mem_info_v2 != null) {
         cuMemGetInfo_v2 = mem_info_v2;
-        // Also try base symbol, prefer v2 but use base if available
-        const base_info = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
-        cuMemGetInfo = if (base_info != null) base_info else mem_info_v2;
+        cuMemGetInfo = mem_info_v2; // Force use of v2
     } else {
-        // No v2 available, use base symbol
         std.debug.print("INFO: Using v1 for cuMemGetInfo (v2 not available)\n", .{});
         cuMemGetInfo = dlsym_lookup(@TypeOf(cuMemGetInfo.?), "cuMemGetInfo");
     }
 
-    // Handle variant - prefer v1, fallback to v2
-    cuMemGetHandle = dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v1") orelse
-        dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v2");
+    // Handle variant - prefer v2
+    cuMemGetHandle = dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v2") orelse
+        dlsym_lookup(@TypeOf(cuMemGetHandle.?), "cuMemGetHandle_v1");
 
     // Context management (required)
-    cuCtxCreate = dlsym_lookup(@TypeOf(cuCtxCreate.?), "cuCtxCreate") orelse return error.SymbolNotFound;
-    cuCtxDestroy = dlsym_lookup(@TypeOf(cuCtxDestroy.?), "cuCtxDestroy") orelse return error.SymbolNotFound;
+    cuCtxCreate = dlsym_lookup(@TypeOf(cuCtxCreate.?), "cuCtxCreate_v2") orelse
+        dlsym_lookup(@TypeOf(cuCtxCreate.?), "cuCtxCreate");
+    if (cuCtxCreate == null) return error.SymbolNotFound;
+
+    cuCtxDestroy = dlsym_lookup(@TypeOf(cuCtxDestroy.?), "cuCtxDestroy_v2") orelse
+        dlsym_lookup(@TypeOf(cuCtxDestroy.?), "cuCtxDestroy");
+    if (cuCtxDestroy == null) return error.SymbolNotFound;
+
     cuCtxSetCurrent = dlsym_lookup(@TypeOf(cuCtxSetCurrent.?), "cuCtxSetCurrent") orelse return error.SymbolNotFound;
     cuCtxGetCurrent = dlsym_lookup(@TypeOf(cuCtxGetCurrent.?), "cuCtxGetCurrent") orelse return error.SymbolNotFound;
-    cuCtxPushCurrent = dlsym_lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent") orelse return error.SymbolNotFound;
-    cuCtxPopCurrent = dlsym_lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent") orelse return error.SymbolNotFound;
+    cuCtxPushCurrent = dlsym_lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent_v2") orelse
+        dlsym_lookup(@TypeOf(cuCtxPushCurrent.?), "cuCtxPushCurrent");
+    if (cuCtxPushCurrent == null) return error.SymbolNotFound;
+
+    cuCtxPopCurrent = dlsym_lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent_v2") orelse
+        dlsym_lookup(@TypeOf(cuCtxPopCurrent.?), "cuCtxPopCurrent");
+    if (cuCtxPopCurrent == null) return error.SymbolNotFound;
+
     cuCtxSynchronize = dlsym_lookup(@TypeOf(cuCtxSynchronize.?), "cuCtxSynchronize") orelse return error.SymbolNotFound;
 
     // Primary Context Management (recommended for libraries like cuBLAS)
