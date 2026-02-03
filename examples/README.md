@@ -104,7 +104,6 @@ The `kernels/` subdirectory contains PTX (Parallel Thread Execution) code for CU
 
 ### Compiling Your Own Kernels
 
-
 For compute capability 12.0 (Blackwell):
 ```bash
 nvcc --cubin -arch=compute_120 -code=sm_120 your_kernel.cu -o your_kernel.cubin
