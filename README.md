@@ -80,9 +80,9 @@ exe.root_module.linkSystemLibrary("c", .{});
 
 ### 3. Example usage
 
-The raw Driver API wrappers remain available under `zigcuda.bindings.*`. For lower-boilerplate code, use the ergonomic layer exported from `zigcuda` directly.
+Use the low-level ergonomic API exported from `zigcuda` directly for normal application code. The raw Driver API wrappers remain available under `zigcuda.bindings.*` when you need an exact CUDA escape hatch.
 
-### Low-level ergonomic API
+### Preferred ergonomic kernel flow
 
 ```zig
 const std = @import("std");
@@ -121,60 +121,70 @@ pub fn runKernel(allocator: std.mem.Allocator, input: []const f16, output: []f16
 
 Defaults keep common CUDA launch boilerplate out of the call site: `grid.z = 1`, `block.y = 1`, `block.z = 1`, `shared_mem_bytes = 0`, `stream = null`, and `sync_after = false`.
 
-**Basic device enumeration:**
+**Device enumeration:**
 ```zig
 const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    try zigcuda.bindings.load();
-    try zigcuda.bindings.init(0);
+    var ctx = try zigcuda.init();
+    defer ctx.deinit();
 
-    const device_count = try zigcuda.bindings.getDeviceCount();
+    const device_count = ctx.getDeviceCount();
     std.debug.print("Found {d} CUDA device(s)\n", .{device_count});
 
     for (0..@min(device_count, 3)) |i| {
-        const device = try zigcuda.bindings.getDevice(@intCast(i));
-        const props = try zigcuda.bindings.getDeviceProperties(device);
+        const props = try ctx.getDeviceProperties(@intCast(i));
+        const name = std.mem.sliceTo(props.name[0..], 0);
+
         std.debug.print("Device {d}: {s}\n", .{
-            i, @as([*:0]const u8, @ptrCast(&props.deviceName)),
+            i,
+            name,
         });
     }
 }
 ```
 
-**Kernel launch example:**
+**Ergonomic kernel launch:**
 ```zig
 const std = @import("std");
 const zigcuda = @import("zigcuda");
+const cuda = zigcuda.bindings;
 
 pub fn main() !void {
-    try zigcuda.bindings.load();
-    try zigcuda.bindings.init(0);
-    
-    // Load compiled CUDA binary (.cubin file)
-    const filename: [:0]const zigcuda.bindings.c_char = @ptrCast("my_kernel.cubin");
-    const module = try zigcuda.bindings.loadModule(filename);
-    
-    const c_kernel_name: [:0]const zigcuda.bindings.c_char = @ptrCast("my_kernel");
-    const kernel_func = try zigcuda.bindings.getFunctionFromModule(module, c_kernel_name);
+    try zigcuda.loadCuda();
+    try zigcuda.initCuda(0);
 
-    // Launch with correct parameter count (grid_dim_z is required!)
-    const empty_params: []?*anyopaque = &.{};
-    
-    try zigcuda.bindings.launchKernel(kernel_func,
-        1,          // grid_dim_x
-        1,          // grid_dim_y  
-        1,          // FIXED: grid_dim_z (cannot be 0!)
-        32,         // block_dim_x 
-        1,          // block_dim_y
-        1,          // block_dim_z
-        0,           // shared_mem_bytes
-        null,       // stream
-        empty_params // kernel parameters
-    );
-    
-    std.debug.print("Kernel launched successfully!\n", .{});
+    const device = try zigcuda.getDevice(0);
+    const ctx = try cuda.createContext(0, device);
+    defer cuda.destroyContext(ctx) catch {};
+
+    const n: u32 = 1024;
+    const bytes = n * @sizeOf(f32);
+
+    var input = try zigcuda.DeviceBuffer.alloc(bytes);
+    defer input.deinit();
+    var output = try zigcuda.DeviceBuffer.alloc(bytes);
+    defer output.deinit();
+
+    var module = try zigcuda.Module.loadFirst(std.heap.page_allocator, &.{
+        "build/kernels/vector_add.cubin",
+        "examples/kernels/vector_add.ptx",
+    });
+    defer module.deinit();
+
+    const kernel = try module.kernel("vector_add");
+
+    var params = zigcuda.Params.init();
+    try params.devicePtr(input.ptr);
+    try params.devicePtr(output.ptr);
+    try params.value(u32, n);
+
+    try kernel.launch(.{
+        .grid = zigcuda.Dim3.init((n + 255) / 256),
+        .block = .{ .x = 256 },
+        .sync_after = true,
+    }, params.slice());
 }
 ```
 
