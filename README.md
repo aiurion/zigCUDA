@@ -4,7 +4,7 @@
 
 # zigCUDA - CUDA Driver API for Zig
 
-Blackwell ready, pure Zig (0.15.2+) bindings to the NVIDIA CUDA Driver API
+Blackwell ready, pure Zig (0.16.0+) bindings to the NVIDIA CUDA Driver API
 
 Dynamic loading of libcuda.so, clean high-level wrappers, and graceful stubs for non-CUDA environments.
 
@@ -75,6 +75,7 @@ const zigcuda_dep = b.dependency("zigcuda", .{
 });
 
 exe.root_module.addImport("zigcuda", zigcuda_dep.module("zigcuda"));
+exe.root_module.linkSystemLibrary("c", .{});
 ```
 
 ### 3. Example usage

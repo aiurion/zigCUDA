@@ -5,7 +5,7 @@ This directory contains practical examples demonstrating how to use the ZigCUDA 
 ## Prerequisites
 
 - CUDA-capable GPU with driver installed
-- Zig compiler (0.15.2 or later)
+- Zig compiler (0.16.0 or later)
 - CUDA Toolkit (for PTX compilation, optional)
 
 ## Examples Overview
@@ -19,7 +19,7 @@ Demonstrates:
 - Querying device properties (name, compute capability, memory, SM count)
 
 ```bash
-zig build-exe examples/01_device_info.zig --dep zigcuda --mod zigcuda::src/lib.zig
+zig build-exe --dep zigcuda -Mroot=examples/01_device_info.zig -Mzigcuda=src/lib.zig -lc
 ./01_device_info
 ```
 
@@ -33,7 +33,7 @@ Demonstrates:
 - Memory cleanup and verification
 
 ```bash
-zig build-exe examples/02_memory_transfer.zig --dep zigcuda --mod zigcuda::src/lib.zig
+zig build-exe --dep zigcuda -Mroot=examples/02_memory_transfer.zig -Mzigcuda=src/lib.zig -lc
 ./02_memory_transfer
 ```
 
@@ -48,7 +48,7 @@ Demonstrates:
 - Result verification
 
 ```bash
-zig build-exe examples/03_kernel_launch.zig --dep zigcuda --mod zigcuda::src/lib.zig
+zig build-exe --dep zigcuda -Mroot=examples/03_kernel_launch.zig -Mzigcuda=src/lib.zig -lc
 ./03_kernel_launch
 ```
 
@@ -62,7 +62,7 @@ Demonstrates:
 - Querying stream status
 
 ```bash
-zig build-exe examples/04_streams.zig --dep zigcuda --mod zigcuda::src/lib.zig
+zig build-exe --dep zigcuda -Mroot=examples/04_streams.zig -Mzigcuda=src/lib.zig -lc
 ./04_streams
 ```
 
@@ -80,13 +80,18 @@ const examples = [_][]const u8{
 };
 
 for (examples) |example_name| {
-    const exe = b.addExecutable(.{
-        .name = example_name,
+    const example_module = b.createModule(.{
         .root_source_file = b.path(b.fmt("examples/{s}.zig", .{example_name})),
         .target = target,
         .optimize = optimize,
     });
-    exe.root_module.addImport("zigcuda", lib_module);
+    example_module.addImport("zigcuda", lib_module);
+    example_module.linkSystemLibrary("c", .{});
+
+    const exe = b.addExecutable(.{
+        .name = example_name,
+        .root_module = example_module,
+    });
     b.installArtifact(exe);
 }
 ```

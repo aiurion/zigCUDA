@@ -6,6 +6,10 @@ const std = @import("std");
 const testing = std.testing;
 const integrations = @import("integrations");
 
+fn microTimestamp() i64 {
+    return std.Io.Timestamp.now(std.testing.io, .awake).toMicroseconds();
+}
+
 test "cuBLAS: Initialize and destroy handle" {
     const init_result = integrations.Cublas.init();
 
@@ -41,9 +45,9 @@ test "cuBLAS: Single-precision matrix multiplication (sgemm)" {
 
     const expected_c = [8]f32{
         // Row 0: [1*7 + 2*11 + 3*15, 1*8 + 2*12 + 3*16, 1*9 + 2*13 + 3*17, 1*10 + 2*14 + 3*18]
-        74.0, 80.0, 86.0, 92.0,
+        74.0,  80.0,  86.0,  92.0,
         // Row 1: [4*7 + 5*11 + 6*15, 4*8 + 5*12 + 6*16, 4*9 + 5*13 + 6*17, 4*10 + 5*14 + 6*18]
-        173.0, 188.0, 203.0, 218.0
+        173.0, 188.0, 203.0, 218.0,
     };
 
     try cublas.sgemm(
@@ -212,7 +216,7 @@ test "cuBLAS: Large matrix multiplication performance" {
     }
 
     // Time the operation
-    const start_time = std.time.microTimestamp();
+    const start_time = microTimestamp();
 
     try cublas.sgemm(
         m, // m
@@ -228,7 +232,7 @@ test "cuBLAS: Large matrix multiplication performance" {
         n, // ldc: leading dimension for C
     );
 
-    const end_time = std.time.microTimestamp();
+    const end_time = microTimestamp();
     const elapsed_us = @as(f64, @floatFromInt(end_time - start_time));
 
     // Log performance metrics

@@ -51,7 +51,7 @@ The format is based on [Semantic Versioning](https://semver.org/spec/v2.0.0.html
 - **Runtime Core**: Device enumeration, context management, memory pools
 - **cuBLAS Operations**: sgemm, dgemm, sdot, saxpy, sscal, and related BLAS functions  
 - **Platform Support**: Linux/WSL2 tested on NVIDIA Blackwell GPU (Compute Capability 12.0+)
-- **Compiler Compatibility**: Zig 0.15.2 or later
+- **Compiler Compatibility**: Zig 0.16.0 or later
 
 ### Testing Coverage
 - Core bindings: 46/46 tests ✅

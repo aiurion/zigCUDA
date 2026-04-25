@@ -289,7 +289,7 @@ test "cuMemcpyHtoD - host to device copy" {
     const dptr = try cuda.allocDeviceMemory(size);
     defer _ = cuda.freeDeviceMemory(dptr) catch {};
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -317,7 +317,7 @@ test "cuMemcpyDtoH - device to host copy" {
     const dptr = try cuda.allocDeviceMemory(size);
     defer _ = cuda.freeDeviceMemory(dptr) catch {};
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -403,7 +403,7 @@ test "cuMemcpyHtoDAsync - async host to device copy" {
     const dptr = try cuda.allocDeviceMemory(size);
     defer _ = cuda.freeDeviceMemory(dptr) catch {};
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -446,7 +446,7 @@ test "cuMemcpyDtoHAsync - async device to host copy" {
     const dptr = try cuda.allocDeviceMemory(size);
     defer _ = cuda.freeDeviceMemory(dptr) catch {};
 
-    var gpa = std.heap.GeneralPurposeAllocator(.{}){};
+    var gpa = std.heap.DebugAllocator(.{}){};
     defer _ = gpa.deinit();
     const allocator = gpa.allocator();
 
@@ -1302,22 +1302,22 @@ test "cuStreamBeginCapture - begin capturing operations into graph" {
 // =============================================================================
 
 test "cuGetErrorName - get error name string" {
-    var str: [*:0]const u8 = undefined;
+    var str: [*:0]const cuda.c_char = undefined;
 
     if (cuda.cuGetErrorName) |f| {
         const res = f(0, &str); // 0 is CUDA_SUCCESS
         try testing.expectEqual(@as(i32, 0), res);
-        std.debug.print("Error name for code 0: {s}\n", .{str});
+        std.debug.print("Error name for code 0: {s}\n", .{@as([*:0]const u8, @ptrCast(str))});
     }
 }
 
 test "cuGetErrorString - get error description" {
-    var str: [*:0]const u8 = undefined;
+    var str: [*:0]const cuda.c_char = undefined;
 
     if (cuda.cuGetErrorString) |f| {
         const res = f(1, &str); // 1 is CUDA_ERROR_INVALID_VALUE
         try testing.expectEqual(@as(i32, 0), res);
-        std.debug.print("Error string for code 1: {s}\n", .{str});
+        std.debug.print("Error string for code 1: {s}\n", .{@as([*:0]const u8, @ptrCast(str))});
     }
 }
 
@@ -1649,13 +1649,11 @@ test "launchKernel - zero parameter fix verification" {
 
     // Test the fix: launchKernel with zero parameters should NOT fail during parameter validation
     const empty_params = [_]?*anyopaque{};
-    const result = cuda.launchKernel(
-        kernel_func.?,
-        @as(u32, 1), // grid_dim_x  
+    const result = cuda.launchKernel(kernel_func.?, @as(u32, 1), // grid_dim_x
         @as(u32, 1), // grid_dim_y
         @as(u32, 1), // FIXED: added missing grid_dim_z
         @as(u32, 32), // block_dim_x
-        @as(u32, 1), // block_dim_y  
+        @as(u32, 1), // block_dim_y
         @as(u32, 1), // block_dim_z
         @as(u32, 0), // shared_mem_bytes
         null, // stream
@@ -1668,7 +1666,7 @@ test "launchKernel - zero parameter fix verification" {
     }
 
     std.debug.print("✓ launchKernel with zero parameters completed (fix working!)\n", .{});
-    
+
     try testing.expect(true); // Test passed
 }
 

@@ -42,12 +42,12 @@ pub fn main() !void {
 
     // Transfer data from host to device
     std.debug.print("Copying data from host to device...\n", .{});
-    try zigcuda.copyHostToDevice(device_ptr, host_input.ptr, byte_size);
+    try zigcuda.copyHostToDevice(device_ptr, std.mem.sliceAsBytes(host_input));
     std.debug.print("✓ Host-to-device transfer complete\n\n", .{});
 
     // Transfer data back from device to host
     std.debug.print("Copying data from device to host...\n", .{});
-    try zigcuda.copyDeviceToHost(host_output.ptr, device_ptr, byte_size);
+    try zigcuda.copyDeviceToHost(std.mem.sliceAsBytes(host_output), device_ptr);
     std.debug.print("✓ Device-to-host transfer complete\n\n", .{});
 
     // Verify data integrity

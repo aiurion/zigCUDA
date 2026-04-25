@@ -27,7 +27,7 @@ pub fn main() !void {
     }
 
     // Array size for vector addition
-    const n: u32 = 1024;
+    var n: u32 = 1024;
     const byte_size = n * @sizeOf(f32);
 
     // Allocate and initialize host memory
@@ -46,16 +46,16 @@ pub fn main() !void {
     std.debug.print("Input B: [{d:.1}, {d:.1}, {d:.1}, ..., {d:.1}]\n\n", .{ h_b[0], h_b[1], h_b[2], h_b[n - 1] });
 
     // Allocate device memory
-    const d_a = try cuda.allocDeviceMemory(byte_size);
+    var d_a = try cuda.allocDeviceMemory(byte_size);
     defer _ = cuda.freeDeviceMemory(d_a) catch {};
-    const d_b = try cuda.allocDeviceMemory(byte_size);
+    var d_b = try cuda.allocDeviceMemory(byte_size);
     defer _ = cuda.freeDeviceMemory(d_b) catch {};
-    const d_c = try cuda.allocDeviceMemory(byte_size);
+    var d_c = try cuda.allocDeviceMemory(byte_size);
     defer _ = cuda.freeDeviceMemory(d_c) catch {};
 
     // Copy input data to device
-    try cuda.copyHostToDevice(d_a, h_a.ptr, byte_size);
-    try cuda.copyHostToDevice(d_b, h_b.ptr, byte_size);
+    try cuda.copyHostToDevice(d_a, std.mem.sliceAsBytes(h_a));
+    try cuda.copyHostToDevice(d_b, std.mem.sliceAsBytes(h_b));
 
     // Load PTX module
     const ptx_source = @embedFile("kernels/vector_add.ptx");
@@ -126,7 +126,7 @@ pub fn main() !void {
     }
 
     // Copy result back to host
-    try cuda.copyDeviceToHost(h_c.ptr, d_c, byte_size);
+    try cuda.copyDeviceToHost(std.mem.sliceAsBytes(h_c), d_c);
 
     // Verify results
     var errors: usize = 0;
