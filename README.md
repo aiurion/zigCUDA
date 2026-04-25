@@ -1,4 +1,4 @@
-[![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
+[![Version: v0.0.2](https://img.shields.io/badge/Version-v0.0.2-blue)](#)
 [![Tests: 113/113 Passing](https://img.shields.io/badge/Tests-113%2F113_Passing-brightgreen)](#)
 [![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
@@ -34,7 +34,7 @@ INFO: cuInit succeeded
 
 ```
 
-## 🎯 Key Features (v0.0.1)
+## 🎯 Key Features (v0.0.2)
 
 - **Dynamic Driver Loading** – Works on Linux native and WSL2, multiple symbol resolution paths
 - **Clean Zig API** – Raw Driver API access plus low-level ergonomic wrappers for memory, params, modules, and launch
@@ -60,7 +60,7 @@ INFO: cuInit succeeded
 ```zig
 .dependencies = .{
     .zigcuda = .{
-        .url = "git+https://github.com/Aiurion/zigcuda.git#v0.0.1",
+        .url = "git+https://github.com/Aiurion/zigcuda.git#v0.0.2",
         // Run `zig build` once to fill in hash
     },
 },

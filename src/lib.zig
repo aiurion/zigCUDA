@@ -6,10 +6,10 @@ const cuda_ergonomics = @import("ergonomics.zig");
 pub const version = std.SemanticVersion{
     .major = 0,
     .minor = 0,
-    .patch = 1,
+    .patch = 2,
 };
 
-pub const version_string = "0.0.1";
+pub const version_string = "0.0.2";
 
 pub const bindings = cuda_bindings;
 

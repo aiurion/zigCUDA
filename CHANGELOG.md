@@ -4,6 +4,16 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Semantic Versioning](https://semver.org/spec/v2.0.0.html), and this project adheres to [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
 
+## [0.0.2] - 2026-04-25
+### Added
+- Zig 0.16.0+ build compatibility and package metadata.
+- Low-level ergonomic API layer with `LaunchConfig`, `Dim3`, `Params`, `DeviceBuffer`, `Module`, `Kernel`, `launch`, and typed copy helpers.
+- Ergonomic launch example and tests covering parameter packing, device buffers, module loading, kernel lookup, and CUDA-backed launches.
+
+### Fixed
+- `bindings.unloadModule` now unwraps the optional CUDA symbol before calling it.
+- README examples now show the ergonomic API as the preferred path and keep raw bindings as the escape hatch.
+
 ## [0.0.1b] - 2026-01-23
 ### ✨ Major Update: CUDA v2 Memory APIs & Example Suite
 
