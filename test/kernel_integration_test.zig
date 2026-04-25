@@ -11,6 +11,11 @@ const Kernel = kernel_abstraction.Kernel;
 const KernelManager = kernel_abstraction.KernelManager;
 const KernelError = kernel_abstraction.KernelError;
 const cuda_bindings = @import("cuda");
+
+fn microTimestamp() i64 {
+    return std.Io.Timestamp.now(std.testing.io, .awake).toMicroseconds();
+}
+
 /// Setup function to ensure CUDA is initialized before tests run
 fn ensureCudaInitialized() !void {
     // Load bindings and initialize CUDA
@@ -206,10 +211,7 @@ test "Kernel: Parameter marshalling for different types" {
     const i32_val: u32 = 42;
 
     // Test that parameters can be marshalled to anyopaque pointers
-    const test_params = [_]?*anyopaque{
-        @constCast(@ptrCast(&f32_val)),
-        @constCast(@ptrCast(&i32_val))
-    };
+    const test_params = [_]?*anyopaque{ @ptrCast(@constCast(&f32_val)), @ptrCast(@constCast(&i32_val)) };
 
     // Should have parameters
     try testing.expect(test_params.len > 0);
@@ -279,9 +281,9 @@ test "Kernel: Parameter passing and launch" {
     if (kernel_result) |kernel| {
         // Test parameter marshalling
         const test_val: u32 = 1000;
-        
-        // Create parameters array  
-        var params_array = [_]?*anyopaque{@constCast(@ptrCast(&test_val))};
+
+        // Create parameters array
+        var params_array = [_]?*anyopaque{@ptrCast(@constCast(&test_val))};
 
         // Launch should work or return proper error (not crash)
         _ = kernel.launch(KernelConfig.initDefault(), &params_array) catch |err| {
@@ -370,13 +372,13 @@ test "Configuration validation at compile-time vs runtime" {
 
 test "KernelConfig: Performance of validation" {
     var iterations: usize = 10000;
-    const start_time = std.time.microTimestamp();
+    const start_time = microTimestamp();
 
     while (iterations > 0) : (iterations -= 1) {
         _ = KernelConfig.initDefault();
     }
 
-    const end_time = std.time.microTimestamp();
+    const end_time = microTimestamp();
     const elapsed_ms = @as(f64, @floatFromInt(end_time - start_time)) / 1000.0;
 
     // Should validate quickly (less than 1ms for 10k iterations)
@@ -398,10 +400,7 @@ test "Parameter conversion: Performance with complex types" {
         const u32_val: u32 = 42;
 
         // Create parameter array directly (no conversion needed)
-        const test_params = [_]?*anyopaque{
-            @constCast(@ptrCast(&f32_val)),
-            @constCast(@ptrCast(&u32_val))
-        };
+        const test_params = [_]?*anyopaque{ @ptrCast(@constCast(&f32_val)), @ptrCast(@constCast(&u32_val)) };
         _ = test_params;
     }
 
@@ -434,9 +433,9 @@ test "Complete workflow: Module -> Kernel -> Launch" {
         // Step 3: Prepare parameters and configuration
         const config = KernelConfig.initDefault();
         const test_val: u32 = 12345;
-        
-        // Create parameters array  
-        var params_array = [_]?*anyopaque{@constCast(@ptrCast(&test_val))};
+
+        // Create parameters array
+        var params_array = [_]?*anyopaque{@ptrCast(@constCast(&test_val))};
 
         // Step 4: Launch the kernel (will fail due to missing symbol or no real hardware)
         _ = kernel.launch(config, &params_array) catch |err| {

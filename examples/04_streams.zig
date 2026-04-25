@@ -5,6 +5,10 @@ const std = @import("std");
 const zigcuda = @import("zigcuda");
 const cuda = zigcuda.bindings;
 
+fn milliTimestamp() i64 {
+    return std.Io.Timestamp.now(std.Io.Threaded.global_single_threaded.io(), .awake).toMilliseconds();
+}
+
 pub fn main() !void {
     // Initialize CUDA
     try cuda.load();
@@ -87,7 +91,7 @@ pub fn main() !void {
     // Launch async operations on each stream
     std.debug.print("Launching async memory copies on all streams...\n", .{});
 
-    const start_time = std.time.milliTimestamp();
+    const start_time = milliTimestamp();
 
     if (cuda.cuMemcpyHtoDAsync) |async_copy| {
         for (host_buffers, device_buffers, streams) |h_buffer, d_buffer, stream| {
@@ -98,7 +102,7 @@ pub fn main() !void {
         // Fallback to synchronous copy if async not available
         std.debug.print("Warning: Async copy not available, using sync copy\n", .{});
         for (host_buffers, device_buffers) |h_buffer, d_buffer| {
-            try cuda.copyHostToDevice(d_buffer, h_buffer.ptr, byte_size);
+            try cuda.copyHostToDevice(d_buffer, std.mem.sliceAsBytes(h_buffer));
         }
     }
 
@@ -113,7 +117,7 @@ pub fn main() !void {
         }
     }
 
-    const end_time = std.time.milliTimestamp();
+    const end_time = milliTimestamp();
     const elapsed_ms = end_time - start_time;
 
     std.debug.print("✓ All streams synchronized\n", .{});

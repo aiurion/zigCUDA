@@ -5,6 +5,7 @@
 const std = @import("std");
 const bindings = @import("../bindings/cuda.zig");
 const errors = @import("../bindings/errors.zig");
+const time = @import("time.zig");
 
 // ============================================================================
 // WRAPPER FUNCTIONS FOR MODERN CUDA (CUDA 13+ / Blackwell)
@@ -123,7 +124,7 @@ pub const MemoryPool = struct {
 
     pub fn init(allocator: std.mem.Allocator, device_index: u32) !MemoryPool {
         const allocations = std.AutoHashMap(bindings.CUdeviceptr, AllocationInfo).init(allocator);
-        
+
         return MemoryPool{
             .allocator = allocator,
             .device_index = device_index,
@@ -160,7 +161,7 @@ pub const MemoryPool = struct {
         const info = AllocationInfo{
             .size = byte_size,
             .alignment = @alignOf(T),
-            .timestamp = std.time.microTimestamp(),
+            .timestamp = time.microTimestamp(),
         };
 
         try self.allocations.put(@intFromPtr(cuda_ptr), info);

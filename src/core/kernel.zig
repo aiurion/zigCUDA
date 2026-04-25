@@ -85,7 +85,7 @@ pub const Kernel = struct {
             // Map CUDA "not found" errors to kernel-specific error
             switch (err) {
                 error.NotFound => return KernelError.FunctionNotFound,
-                else => return err,  // Propagate other errors unchanged
+                else => return err, // Propagate other errors unchanged
             }
         };
 
@@ -96,15 +96,12 @@ pub const Kernel = struct {
         };
     }
 
-    /// Type-safe kernel launch with compile-time validated configuration  
+    /// Type-safe kernel launch with compile-time validated configuration
     pub fn launch(self: *const Kernel, config: KernelConfig, params: anytype) !void {
         std.debug.print("Launching kernel '{s}'\n", .{self.name});
 
         // Pass parameters directly to CUDA bindings (correct parameter order)
-        try bindings.launchKernel(self.function_handle, 
-            config.grid_size[0], config.grid_size[1], 1,
-            config.block_size[0], config.block_size[1], config.block_size[2],  
-            config.shared_memory, null, params);
+        try bindings.launchKernel(self.function_handle, config.grid_size[0], config.grid_size[1], 1, config.block_size[0], config.block_size[1], config.block_size[2], config.shared_memory, null, params);
     }
 
     /// Simplified 1D kernel launch with automatic grid sizing
@@ -162,25 +159,29 @@ pub const Kernel = struct {
     }
 };
 
-/// Convert parameters from Zig types to CUDA parameter format  
+/// Convert parameters from Zig types to CUDA parameter format
 pub fn convertParameters(params: anytype) ![]?*anyopaque {
     const T = @TypeOf(params);
-    
+
     // Handle slice types directly (most common case)
-    if (@typeInfo(T) == .pointer and @typeInfo(T).pointer.child == ?*anyopaque) {
-        return params;
-    }
-    
-    // For compile-time fixed arrays, convert to proper format
-    if (@typeInfo(T) == .array) {
-        const array = params;
-        
-        // Create properly formatted parameters
-        var result: [array.len]?*anyopaque = undefined;
-        for (array, 0..) |param, i| {
-            result[i] = param;
+    if (@typeInfo(T) == .pointer) {
+        const ptr = @typeInfo(T).pointer;
+        if (ptr.size == .slice and ptr.child == ?*anyopaque) {
+            return params;
         }
-        return &result;
+
+        if (ptr.size == .one and @typeInfo(ptr.child) == .array) {
+            const array = @typeInfo(ptr.child).array;
+            if (array.child == ?*anyopaque) {
+                return params[0..];
+            }
+        }
+    }
+
+    // Fixed arrays must be passed by pointer or slice so the returned slice
+    // does not outlive temporary stack storage inside this helper.
+    if (@typeInfo(T) == .array) {
+        @compileError("pass parameter arrays by pointer or slice");
     }
 
     @compileError("Unsupported parameter type - expected slice or array of ?*anyopaque");

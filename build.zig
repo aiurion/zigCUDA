@@ -26,7 +26,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     // Also link libc for the executable itself
-    cli_exe.linkLibC();
+    cli_exe.root_module.linkSystemLibrary("c", .{});
 
     // Install the CLI tool
     b.installArtifact(cli_exe);
@@ -140,11 +140,11 @@ pub fn build(b: *std.Build) !void {
     });
 
     // Link all test executables against system libc
-    lib_tests.linkLibC();
-    binding_tests.linkLibC();
-    v2_memory_tests.linkLibC();
-    runtime_tests.linkLibC();
-    kernel_integration_tests.linkLibC();
+    lib_tests.root_module.linkSystemLibrary("c", .{});
+    binding_tests.root_module.linkSystemLibrary("c", .{});
+    v2_memory_tests.root_module.linkSystemLibrary("c", .{});
+    runtime_tests.root_module.linkSystemLibrary("c", .{});
+    kernel_integration_tests.root_module.linkSystemLibrary("c", .{});
 
     // SYSTEM DYNAMIC LINKER COMFIGURATION FOR ALL TESTS
 
@@ -208,7 +208,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     // Link simple test against system libc
-    simple_integration_tests.linkLibC();
+    simple_integration_tests.root_module.linkSystemLibrary("c", .{});
 
     // Use system dynamic linker for simple integration tests
     const run_simple_integration_tests = b.addSystemCommand(&.{
@@ -253,7 +253,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     // Link cuBLAS test against system libc
-    cublas_integration_tests.linkLibC();
+    cublas_integration_tests.root_module.linkSystemLibrary("c", .{});
 
     // Use system dynamic linker for cuBLAS integration tests
     const run_cublas_integration_tests = b.addSystemCommand(&.{
@@ -281,7 +281,7 @@ pub fn build(b: *std.Build) !void {
     });
 
     // Link simple cuBLAS test against system libc
-    cublas_simple_tests.linkLibC();
+    cublas_simple_tests.root_module.linkSystemLibrary("c", .{});
 
     // Use system dynamic linker for simple cuBLAS tests
     const run_cublas_simple_tests = b.addSystemCommand(&.{
@@ -304,4 +304,5 @@ pub fn build(b: *std.Build) !void {
     all_tests_step.dependOn(kernel_integration_test_step);
     all_tests_step.dependOn(simple_integration_test_step);
     all_tests_step.dependOn(cublas_integration_test_step);
+    all_tests_step.dependOn(cublas_simple_test_step);
 }

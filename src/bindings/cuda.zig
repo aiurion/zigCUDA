@@ -13,10 +13,13 @@ fn isDebugEnabled() bool {
     return DEBUG_MODE_ENABLED;
 }
 
-// Use C's dlopen instead of Zig's DynLib for WSL compatibility
-const c = @cImport({
-    @cInclude("dlfcn.h");
-});
+// Use C's dlopen instead of Zig's DynLib for WSL compatibility.
+// Explicit declarations keep the bindings clean on Zig 0.16.
+extern "c" fn dlopen(filename: [*:0]const u8, flags: c_int) ?*anyopaque;
+extern "c" fn dlsym(handle: *anyopaque, symbol: [*:0]const u8) ?*anyopaque;
+extern "c" fn dlerror() ?[*:0]const c_char;
+
+const RTLD_NOW: c_int = 2;
 
 pub const @"c_int" = c_int;
 pub const @"c_uint" = c_uint;
@@ -278,7 +281,7 @@ pub var cuEventElapsedTime: ?*const fn (ms: *f32, start: *CUevent, end: *CUevent
 /// Helper to lookup a symbol using C's dlsym
 fn dlsym_lookup(comptime T: type, name: [*:0]const u8) ?T {
     if (lib_handle) |handle| {
-        const sym = c.dlsym(handle, name);
+        const sym = dlsym(handle, name);
         if (sym != null) {
             return @ptrCast(sym);
         }
@@ -297,7 +300,7 @@ pub fn load() !void {
     };
 
     for (lib_paths) |path| {
-        lib_handle = c.dlopen(path, c.RTLD_NOW);
+        lib_handle = dlopen(path, RTLD_NOW);
         if (lib_handle != null) {
             if (isDebugEnabled()) {
                 std.debug.print("DEBUG: Loaded CUDA library from {s}\n", .{path});
@@ -307,9 +310,9 @@ pub fn load() !void {
     }
 
     if (lib_handle == null) {
-        const err = c.dlerror();
+        const err = dlerror();
         if (err != null) {
-            std.debug.print("ERROR: Failed to load CUDA library: {s}\n", .{err});
+            std.debug.print("ERROR: Failed to load CUDA library: {s}\n", .{@as([*:0]const u8, @ptrCast(err.?))});
         }
         return error.CudaLibraryNotFound;
     }
