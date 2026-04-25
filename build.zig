@@ -53,8 +53,15 @@ pub fn build(b: *std.Build) !void {
         .target = target,
     });
 
+    // Create ergonomic API test module
+    const ergonomics_test_module = b.createModule(.{
+        .root_source_file = b.path("test/ergonomics_test.zig"),
+        .target = target,
+    });
+
     // Add library import to test
     lib_test_module.addImport("zigcuda", lib_module);
+    ergonomics_test_module.addImport("zigcuda", lib_module);
 
     // Create bindings test module (low-level CUDA API testing)
     const bindings_test_module = b.createModule(.{
@@ -118,6 +125,7 @@ pub fn build(b: *std.Build) !void {
     // CREATE ALL TEST EXECUTABLES
 
     const lib_tests = b.addTest(.{ .root_module = lib_test_module });
+    const ergonomics_tests = b.addTest(.{ .root_module = ergonomics_test_module });
 
     // Create bindings test executable (low-level API tests)
     const binding_tests = b.addTest(.{
@@ -141,6 +149,7 @@ pub fn build(b: *std.Build) !void {
 
     // Link all test executables against system libc
     lib_tests.root_module.linkSystemLibrary("c", .{});
+    ergonomics_tests.root_module.linkSystemLibrary("c", .{});
     binding_tests.root_module.linkSystemLibrary("c", .{});
     v2_memory_tests.root_module.linkSystemLibrary("c", .{});
     runtime_tests.root_module.linkSystemLibrary("c", .{});
@@ -153,6 +162,12 @@ pub fn build(b: *std.Build) !void {
         "/lib64/ld-linux-x86-64.so.2",
     });
     run_lib_tests_cmd.addArtifactArg(lib_tests);
+
+    // Use system dynamic linker for ergonomic API tests
+    const run_ergonomics_tests_cmd = b.addSystemCommand(&.{
+        "/lib64/ld-linux-x86-64.so.2",
+    });
+    run_ergonomics_tests_cmd.addArtifactArg(ergonomics_tests);
 
     // Use system dynamic linker to avoid glibc mismatch issues for bindings tests
     const run_bindings_tests = b.addSystemCommand(&.{
@@ -182,6 +197,9 @@ pub fn build(b: *std.Build) !void {
 
     const lib_test_step = b.step("test-lib", "Run library API tests");
     lib_test_step.dependOn(&run_lib_tests_cmd.step);
+
+    const ergonomics_test_step = b.step("test-ergonomics", "Run low-level ergonomic API tests");
+    ergonomics_test_step.dependOn(&run_ergonomics_tests_cmd.step);
 
     const bindings_test_step = b.step("test-bindings", "Run comprehensive CUDA API binding tests");
     bindings_test_step.dependOn(&run_bindings_tests.step);
@@ -297,7 +315,9 @@ pub fn build(b: *std.Build) !void {
     const cublas_simple_test_step = b.step("test-cublas-simple", "Run simplified cuBLAS stub tests");
     cublas_simple_test_step.dependOn(&run_cublas_simple_tests.step);
 
-    const all_tests_step = b.step("test", "Run all tests (bindings + v2-memory + runtime + kernel integration + simple + cuBLAS integration)");
+    const all_tests_step = b.step("test", "Run all tests (bindings + ergonomics + v2-memory + runtime + kernel integration + simple + cuBLAS integration)");
+    all_tests_step.dependOn(lib_test_step);
+    all_tests_step.dependOn(ergonomics_test_step);
     all_tests_step.dependOn(bindings_test_step);
     all_tests_step.dependOn(v2_memory_test_step);
     all_tests_step.dependOn(runtime_test_step);

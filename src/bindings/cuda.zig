@@ -941,7 +941,8 @@ pub fn loadModuleFromData(image: [:0]const c_char) errors.CUDAError!*CUmodule {
 
 /// Unload a CUDA module
 pub fn unloadModule(module: *CUmodule) errors.CUDAError!void {
-    const result = cuModuleUnload(module);
+    const cu_module_unload = cuModuleUnload orelse return error.SymbolNotFound;
+    const result = cu_module_unload(module);
     if (result == CUDA_SUCCESS) {
         return;
     }
