@@ -1,5 +1,5 @@
 [![Version: v0.0.1](https://img.shields.io/badge/Version-v0.0.1-blue)](#)
-[![Tests: 101/101 Passing](https://img.shields.io/badge/Tests-101%2F101_Passing-brightgreen)](#)
+[![Tests: 113/113 Passing](https://img.shields.io/badge/Tests-113%2F113_Passing-brightgreen)](#)
 [![Binary Size: ~8MB](https://img.shields.io/badge/Binary_Size-%7E8MB-success)](#)
 
 # zigCUDA - CUDA Driver API for Zig
@@ -37,10 +37,10 @@ INFO: cuInit succeeded
 ## 🎯 Key Features (v0.0.1)
 
 - **Dynamic Driver Loading** – Works on Linux native and WSL2, multiple symbol resolution paths
-- **Clean Zig API** – Context, device, memory, streams, events, module loading, kernel launch
+- **Clean Zig API** – Raw Driver API access plus low-level ergonomic wrappers for memory, params, modules, and launch
 - **Graceful Stubs** – Compiles and runs basic checks without a GPU
 - **Zero External Dependencies** – Only needs NVIDIA driver at runtime
-- **Test Coverage** – 97 passing tests across core, bindings, and integrations
+- **Test Coverage** – 113 passing tests across core, bindings, ergonomics, and integrations
 - **Easy Library Usage** – Single `@import("zigcuda")` with init/deinit pattern
 
 ## 📊 Status
@@ -80,21 +80,64 @@ exe.root_module.linkSystemLibrary("c", .{});
 
 ### 3. Example usage
 
+The raw Driver API wrappers remain available under `zigcuda.bindings.*`. For lower-boilerplate code, use the ergonomic layer exported from `zigcuda` directly.
+
+### Low-level ergonomic API
+
+```zig
+const std = @import("std");
+const zigcuda = @import("zigcuda");
+
+pub fn runKernel(allocator: std.mem.Allocator, input: []const f16, output: []f16) !void {
+    var input_dev = try zigcuda.DeviceBuffer.alloc(std.mem.sliceAsBytes(input).len);
+    defer input_dev.deinit();
+    var output_dev = try zigcuda.DeviceBuffer.alloc(std.mem.sliceAsBytes(output).len);
+    defer output_dev.deinit();
+
+    try input_dev.copyFromTyped(f16, input);
+
+    var module = try zigcuda.Module.loadFirst(allocator, &.{
+        "build/kernels/lm_head_q6k_mmq.cubin",
+        "kernels/lm_head_q6k_mmq.cubin",
+    });
+    defer module.deinit();
+
+    const kernel = try module.kernel("lm_head_mmq_q6k_kernel");
+
+    var params = zigcuda.Params.init();
+    try params.devicePtr(output_dev.ptr);
+    try params.devicePtr(input_dev.ptr);
+    try params.value(i32, @intCast(input.len));
+
+    try kernel.launch(.{
+        .grid = .{ .x = @intCast((input.len + 255) / 256) },
+        .block = .{ .x = 256 },
+        .sync_after = true,
+    }, params.slice());
+
+    try output_dev.copyToTyped(f16, output);
+}
+```
+
+Defaults keep common CUDA launch boilerplate out of the call site: `grid.z = 1`, `block.y = 1`, `block.z = 1`, `shared_mem_bytes = 0`, `stream = null`, and `sync_after = false`.
+
 **Basic device enumeration:**
 ```zig
 const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    try zigcuda.bindings.init();
+    try zigcuda.bindings.load();
+    try zigcuda.bindings.init(0);
 
     const device_count = try zigcuda.bindings.getDeviceCount();
     std.debug.print("Found {d} CUDA device(s)\n", .{device_count});
 
     for (0..@min(device_count, 3)) |i| {
-        const props = try zigcuda.bindings.getDeviceProperties(@intCast(i));
+        const device = try zigcuda.bindings.getDevice(@intCast(i));
+        const props = try zigcuda.bindings.getDeviceProperties(device);
         std.debug.print("Device {d}: {s}\n", .{
-            i, @as([:0]const u8, @ptrCast(&props.name)),
+            i, @as([*:0]const u8, @ptrCast(&props.deviceName)),
         });
     }
 }
@@ -106,14 +149,14 @@ const std = @import("std");
 const zigcuda = @import("zigcuda");
 
 pub fn main() !void {
-    try zigcuda.bindings.init();
+    try zigcuda.bindings.load();
+    try zigcuda.bindings.init(0);
     
     // Load compiled CUDA binary (.cubin file)
-    const filename: [:0]zigcuda.bindings.@"c_char" = "my_kernel.cubin";
+    const filename: [:0]const zigcuda.bindings.c_char = @ptrCast("my_kernel.cubin");
     const module = try zigcuda.bindings.loadModule(filename);
     
-    var kernel_name_buf = "my_kernel".*;
-    const c_kernel_name: [:0]zigcuda.bindings.@"c_char" = @ptrCast(&kernel_name_buf);
+    const c_kernel_name: [:0]const zigcuda.bindings.c_char = @ptrCast("my_kernel");
     const kernel_func = try zigcuda.bindings.getFunctionFromModule(module, c_kernel_name);
 
     // Launch with correct parameter count (grid_dim_z is required!)
@@ -154,7 +197,7 @@ pub fn main() !void {
 ## 🛠️ Development
 
 ```bash
-zig build run test      # Run full suite (97 tests)
+zig build test      # Run full suite
 zig build run       # Diagnostic tool
 ```
 

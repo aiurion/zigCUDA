@@ -1,6 +1,7 @@
 // src/lib.zig
 const std = @import("std");
 const cuda_bindings = @import("bindings/cuda.zig");
+const cuda_ergonomics = @import("ergonomics.zig");
 
 pub const version = std.SemanticVersion{
     .major = 0,
@@ -23,6 +24,17 @@ pub const freeDeviceMemory = cuda_bindings.freeDeviceMemory;
 pub const copyHostToDevice = cuda_bindings.copyHostToDevice;
 pub const copyDeviceToHost = cuda_bindings.copyDeviceToHost;
 pub const launchKernel = cuda_bindings.launchKernel;
+
+// Low-level ergonomic API layer. Raw bindings remain available under bindings.*.
+pub const Dim3 = cuda_ergonomics.Dim3;
+pub const LaunchConfig = cuda_ergonomics.LaunchConfig;
+pub const Params = cuda_ergonomics.Params;
+pub const DeviceBuffer = cuda_ergonomics.DeviceBuffer;
+pub const Module = cuda_ergonomics.Module;
+pub const Kernel = cuda_ergonomics.Kernel;
+pub const launch = cuda_ergonomics.launch;
+pub const copyToDeviceTyped = cuda_ergonomics.copyToDeviceTyped;
+pub const copyFromDeviceTyped = cuda_ergonomics.copyFromDeviceTyped;
 
 // Type alias for CUDA int type
 pub const CudaCInt = cuda_bindings.c_int;

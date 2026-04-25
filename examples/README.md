@@ -66,6 +66,21 @@ zig build-exe --dep zigcuda -Mroot=examples/04_streams.zig -Mzigcuda=src/lib.zig
 ./04_streams
 ```
 
+### 05_ergonomic_launch.zig
+**Low-level ergonomic kernel launch**
+
+Demonstrates:
+- RAII-style `DeviceBuffer` ownership
+- Typed host/device copies
+- `Params` kernel argument packing
+- `LaunchConfig` defaults
+- `Module.loadFirst` and `Kernel.launch`
+
+```bash
+zig build-exe --dep zigcuda -Mroot=examples/05_ergonomic_launch.zig -Mzigcuda=src/lib.zig -lc
+./05_ergonomic_launch
+```
+
 ## Building All Examples
 
 You can add these examples to your `build.zig` to make them easy to build:
@@ -77,6 +92,7 @@ const examples = [_][]const u8{
     "02_memory_transfer",
     "03_kernel_launch",
     "04_streams",
+    "05_ergonomic_launch",
 };
 
 for (examples) |example_name| {
