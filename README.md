@@ -226,3 +226,6 @@ MIT (see LICENSE file)
 ---
 
 ZigCUDA gives you real CUDA access in pure Zig with minimal overhead. The foundation is ready – start building GPU code today.
+
+
+zigCUDA is an independent open-source project and is not affiliated with or endorsed by NVIDIA Corporation. CUDA is a trademark and/or registered trademark of NVIDIA Corporation in the U.S. and other countries.
