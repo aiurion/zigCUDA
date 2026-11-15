@@ -1,0 +1,136 @@
+# Optional, non-required check. The hosted runners have no GPU, and zigCUDA
+# degrades to stubs when it finds none, so a plain `zig build test` passes
+# without touching a device. This workflow runs the driver-API tests and the
+# examples on a simulated NVIDIA H100 (https://github.com/pantheongpu/pantheonsim)
+# and fails if no device is found or any suite skips tests. A simulator cannot
+# reproduce hardware-specific behavior or timing, so it complements running the
+# tests on real hardware and does not replace it.
+name: gpu-sim
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - "build.zig"
+      - "build.zig.zon"
+      - "src/**"
+      - "test/**"
+      - "examples/**"
+      - ".github/workflows/gpu-sim.yml"
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  tests:
+    name: Tests and examples on simulated H100
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          persist-credentials: false
+
+      # build.zig.zon: minimum_zig_version = "0.16.0"
+      - name: Install Zig 0.16.0
+        uses: mlugg/setup-zig@d1434d08867e3ee9daa34448df10607b98908d29 # v2
+        with:
+          version: 0.16.0
+
+      # No CUDA toolkit is needed: zigCUDA loads libcuda at run time, and the
+      # simulator supplies it.
+      - name: Set up the simulated GPU
+        uses: pantheongpu/setup-pantheonsim@656f502ef4782d94d34d8ddd368e333960609639 # v0.1.8
+        with:
+          gpu: nvidia/h100
+          cuda-toolkit: none
+
+      # `zig build run` prints "no CUDA devices" or "Could not load libcuda"
+      # and still exits 0 when there is no GPU, so check the output.
+      - name: Check that a device is found
+        run: |
+          vgpu run zig build run 2>&1 | tee device.log
+          grep -q "Device Count: 1" device.log
+          grep -q "NVIDIA H100" device.log
+          ! grep -qiE "no CUDA devices|Could not load|Fatal Error" device.log
+
+      # Each suite must find the simulated GPU, run every test (nothing
+      # skipped) and print none of the stub or fallback warnings. test-runtime
+      # only builds structs and never calls the driver, so it is not held to the
+      # device check. One test is allowed to fail: the simulator version pinned
+      # by the action answers cuStreamBeginCapture with 801 where a real GPU
+      # returns 0; any other failure fails the step. test-cublas-* is left out:
+      # the cuBLAS integration is partial and needs the CUDA toolkit.
+      - name: Run the test suites
+        run: |
+          failed=0
+          suite() {
+            local step=$1 want=$2 allowed=${3:-} nodev=${4:-} log="suite-$1.log"
+            echo "::group::zig build $step"
+            vgpu run zig build "$step" > "$log" 2>&1 || true
+            cat "$log"
+            echo "::endgroup::"
+            local ok=1 passed=0 skipped=0 nfail=0
+            if grep -q "^All [0-9]* tests passed\." "$log"; then
+              passed=$(sed -n 's/^All \([0-9]*\) tests passed\..*/\1/p' "$log")
+            else
+              read -r passed skipped nfail < <(sed -n 's/^\([0-9]*\) passed; \([0-9]*\) skipped; \([0-9]*\) failed\./\1 \2 \3/p' "$log") || true
+            fi
+            echo "$step: $passed passed, $skipped skipped, $nfail failed"
+            [ "$((passed + nfail))" -eq "$want" ] || { echo "::error::$step: expected $want tests"; ok=0; }
+            [ "$skipped" -eq 0 ] || { echo "::error::$step: tests were skipped"; ok=0; }
+            if [ -z "$nodev" ]; then
+              grep -q "virtual GPU platform initialized: 1 x nvidia/h100" "$log" || { echo "::error::$step: no simulated H100"; ok=0; }
+              grep -q "INFO: cuInit succeeded" "$log" || { echo "::error::$step: cuInit did not succeed"; ok=0; }
+            fi
+            if grep -qiE "WARNING|falling back|no CUDA devices|Could not load" "$log"; then echo "::error::$step: stub or fallback warning"; ok=0; fi
+            # names of the failing tests, from the "N/M file.test.name...OK|FAIL" lines
+            awk '/^[0-9]+\/[0-9]+ /{name=$0; sub(/^[0-9]+\/[0-9]+ [^ ]*\.test\./,"",name); sub(/\.\.\..*/,"",name)} /^FAIL \(/{print name}' "$log" > "$log.failed"
+            while IFS= read -r name; do
+              [ "$name" = "$allowed" ] || { echo "::error::$step: failed test: $name"; ok=0; }
+            done < "$log.failed"
+            [ "$(wc -l < "$log.failed")" -eq "$nfail" ] || { echo "::error::$step: could not match the failures"; ok=0; }
+            [ "$ok" -eq 1 ] || failed=1
+          }
+          suite test-lib 2
+          suite test-ergonomics 8
+          suite test-bindings 45 "cuStreamBeginCapture - begin capturing operations into graph"
+          suite test-v2-memory 6
+          suite test-runtime 13 "" no-device
+          suite test-kernel-integration 23
+          exit $failed
+
+      # 03 loads the shipped vector_add.ptx; 05 tries vector_add.cubin first
+      # and then the .ptx. 02_memory_transfer (no context created, fails on real
+      # hardware too) and 03_kernel_launch_fixed (does not compile) are left out.
+      - name: Run the examples
+        run: |
+          mkdir -p exbin
+          failed=0
+          run_example() {
+            local name=$1 pattern=$2
+            zig build-exe --dep zigcuda -Mroot="examples/$name.zig" -Mzigcuda=src/lib.zig -lc -femit-bin="exbin/$name"
+            echo "::group::$name"
+            local rc=0
+            vgpu run "exbin/$name" > "$name.log" 2>&1 || rc=$?
+            cat "$name.log"
+            echo "::endgroup::"
+            [ "$rc" -eq 0 ] || { echo "::error::$name exited $rc"; failed=1; return; }
+            grep -q "virtual GPU platform initialized: 1 x nvidia/h100" "$name.log" || { echo "::error::$name: no simulated H100"; failed=1; }
+            grep -q "$pattern" "$name.log" || { echo "::error::$name: expected '$pattern'"; failed=1; }
+          }
+          run_example 01_device_info "Device 0: NVIDIA H100"
+          run_example 03_kernel_launch "Verified: C\[i\] = A\[i\] + B\[i\] for all 1024 elements"
+          run_example 04_streams "SUCCESS: Streams example completed"
+          run_example 05_ergonomic_launch "Vector add completed with ergonomic zigCUDA API (1024 elements)"
+          exit $failed
